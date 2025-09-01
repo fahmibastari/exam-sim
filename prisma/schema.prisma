@@ -1,0 +1,97 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  password  String // hashed (bcrypt)
+  role      Role      @default(USER)
+  createdAt DateTime  @default(now())
+  attempts  Attempt[]
+}
+
+model ExamPackage {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?
+  // simpan hash token, bukan token mentah
+  tokenHash    String
+  isActive     Boolean    @default(true)
+  timeLimitMin Int? // opsional timer
+  createdAt    DateTime   @default(now())
+  questions    Question[]
+  attempts     Attempt[]
+}
+
+model Question {
+  id              String         @id @default(cuid())
+  examPackageId   String
+  order           Int
+  text            String
+  imageUrl        String?
+  options         AnswerOption[]
+  correctOptionId String // tetap sebagai String sederhana
+
+  ExamPackage ExamPackage @relation(fields: [examPackageId], references: [id], onDelete: Cascade)
+
+  answers AttemptAnswer[]
+}
+
+model AnswerOption {
+  id         String @id @default(cuid())
+  questionId String
+  label      String // "A" | "B" | "C" | "D"
+  text       String
+
+  Question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, label])
+}
+
+model Attempt {
+  id            String    @id @default(cuid())
+  userId        String?
+  examPackageId String
+  startedAt     DateTime  @default(now())
+  submittedAt   DateTime?
+  score         Int?
+  total         Int?
+
+  // Peserta non-login
+  participantName  String?
+  participantEmail String?
+  participantInfo  String?
+
+  User        User?           @relation(fields: [userId], references: [id])
+  ExamPackage ExamPackage     @relation(fields: [examPackageId], references: [id])
+  answers     AttemptAnswer[]
+
+  @@unique([userId, examPackageId]) // untuk user yang login
+  @@unique([examPackageId, participantEmail]) // opsional: cegah email sama ikut paket sama
+  @@index([examPackageId])
+}
+
+model AttemptAnswer {
+  id         String @id @default(cuid())
+  attemptId  String
+  questionId String
+  optionId   String // opsi yang dipilih user
+
+  Attempt  Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  Question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([questionId])
+}
