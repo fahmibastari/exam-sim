@@ -1,30 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
-const prisma = new PrismaClient()
+// src/app/api/exams/[attemptId]/questions/route.ts
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 
-export async function GET(req: NextRequest, ctx: { params: Promise<{ attemptId: string }> }) {
-  const { attemptId } = await ctx.params  // ⬅️ await dulu
+// ... existing imports
+export async function GET(_: Request, { params }: { params: { attemptId: string } }) {
   const attempt = await prisma.attempt.findUnique({
-    where: { id: attemptId },
+    where: { id: params.attemptId },
     include: { ExamPackage: true },
   })
-  if (!attempt) return NextResponse.json({ error: 'not found' }, { status: 404 })
-
-  // kalau attempt milik user login → wajib cocok
-  if (attempt.userId) {
-    const session = await getServerSession(authOptions)
-    if (!session?.user || (session.user as any).id !== attempt.userId) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
-    }
-  }
+  if (!attempt) return NextResponse.json({ error: 'Attempt tidak ditemukan' }, { status: 404 })
 
   const questions = await prisma.question.findMany({
     where: { examPackageId: attempt.examPackageId },
-    include: { options: true },
-    orderBy: { order: 'asc' }
+    orderBy: { order: 'asc' },
+    include: { options: { orderBy: { label: 'asc' } } },
   })
-  return NextResponse.json({ questions, timeLimitMin: attempt.ExamPackage.timeLimitMin ?? null })
+
+  // NEW: hitung endsAt (ISO) dari startedAt + timeLimitMin
+  let endsAt: string | null = null
+  const limit = attempt.ExamPackage.timeLimitMin
+  if (typeof limit === 'number' && Number.isFinite(limit)) {
+    const end = new Date(attempt.startedAt.getTime() + limit * 60_000)
+    endsAt = end.toISOString()
+  }
+
+  return NextResponse.json({
+    questions: questions.map(q => ({
+      id: q.id,
+      order: q.order,
+      text: q.text,
+      imageUrl: q.imageUrl,
+      type: q.type,
+      points: q.points,
+      required: q.required,
+      settings: q.settings,
+      options: q.options.map(o => ({ id: o.id, label: o.label, text: o.text })),
+    })),
+    timeLimitMin: attempt.ExamPackage.timeLimitMin ?? null,
+    endsAt, // NEW
+  })
 }
-export const runtime = 'nodejs'

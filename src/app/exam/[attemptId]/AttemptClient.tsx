@@ -1,20 +1,39 @@
+// src/app/exam/[attemptId]/AttemptClient.tsx
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type Option = { id: string; label: string; text: string }
-type Question = { id: string; order: number; text: string; imageUrl: string | null; options: Option[] }
-type Payload = { questions: Question[]; timeLimitMin: number | null }
+type Question = {
+  id: string
+  order: number
+  text: string
+  imageUrl: string | null
+  type: 'SINGLE_CHOICE'|'MULTI_SELECT'|'TRUE_FALSE'|'SHORT_TEXT'|'ESSAY'|'NUMBER'|'RANGE'
+  settings?: any
+  options: Option[]
+}
+type Payload = { questions: Question[]; timeLimitMin: number | null; endsAt: string | null } // NEW
+
+type AnswerShape = {
+  selectedOptionIds?: string[]
+  valueText?: string
+  valueNumber?: number | null
+}
 
 export default function AttemptClient({ attemptId }: { attemptId: string }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [qs, setQs] = useState<Question[]>([])
-  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [answers, setAnswers] = useState<Record<string, AnswerShape>>({})
   const [timeLimitMin, setTimeLimitMin] = useState<number | null>(null)
   const acRef = useRef<AbortController | null>(null)
+  const [endsAt, setEndsAt] = useState<string | null>(null)
+  const [remainingSec, setRemainingSec] = useState<number | null>(null)
+  const [expired, setExpired] = useState(false)
+  const autoSubmitRef = useRef(false)
 
   // load questions
   useEffect(() => {
@@ -28,6 +47,7 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
         const json = (await r.json()) as Payload
         setQs(json.questions)
         setTimeLimitMin(json.timeLimitMin ?? null)
+        setEndsAt(json.endsAt ?? null) // NEW
       } catch (e: any) {
         if (e.name !== 'AbortError') setError(e.message || 'Gagal memuat')
       } finally {
@@ -37,14 +57,72 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
     return () => ac.abort()
   }, [attemptId])
 
-  async function choose(qid: string, optionId: string) {
-    setAnswers(prev => ({ ...prev, [qid]: optionId }))
+  useEffect(() => {
+    if (!endsAt) {
+      setRemainingSec(null)
+      setExpired(false)
+      return
+    }
+  
+    const end = new Date(endsAt) // ✅ endsAt sudah dipastikan string, bukan null
+    if (isNaN(end.getTime())) {
+      // guard kalau ISO-nya aneh
+      setRemainingSec(null)
+      setExpired(false)
+      return
+    }
+  
+    const compute = () => Math.floor((end.getTime() - Date.now()) / 1000)
+  
+    setRemainingSec(compute())
+    const id = setInterval(() => {
+      const left = compute()
+      setRemainingSec(left)
+      const isExpired = left <= 0
+      setExpired(isExpired)
+      if (isExpired && !autoSubmitRef.current) {
+        autoSubmitRef.current = true
+        submit()
+      }
+    }, 1000)
+  
+    return () => clearInterval(id)
+  }, [endsAt])
+  
+  // Saat expired, jangan kirim answer lagi
+  async function save(qid: string, patch: AnswerShape) {
+    if (expired) return
+    setAnswers(prev => ({ ...prev, [qid]: { ...(prev[qid] ?? {}), ...patch } }))
     try {
       await fetch(`/api/exams/${attemptId}/answer`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questionId: qid, optionId })
+        body: JSON.stringify({ questionId: qid, ...patch }),
       })
-    } catch {}
+    } catch {
+      setError('Gagal menyimpan jawaban. Cek koneksi.')
+    }
+  }
+
+  // Format mm:ss
+  const timeBadge = typeof remainingSec === 'number'
+    ? `${String(Math.max(0, Math.floor(remainingSec / 60))).padStart(2,'0')}:${String(Math.max(0, remainingSec % 60)).padStart(2,'0')}`
+    : null
+
+  function chooseSingle(qid: string, optionId: string) {
+    save(qid, { selectedOptionIds: [optionId] })
+  }
+  function toggleMulti(qid: string, optionId: string) {
+    const curr = answers[qid]?.selectedOptionIds ?? []
+    const next = curr.includes(optionId) ? curr.filter(id => id !== optionId) : [...curr, optionId]
+    save(qid, { selectedOptionIds: next })
+  }
+  function setText(qid: string, valueText: string) {
+    save(qid, { valueText })
+  }
+  function setNumber(qid: string, value: string) {
+    const n = value === '' ? null : Number(value)
+    if (n !== null && !Number.isFinite(n)) return
+    save(qid, { valueNumber: n })
   }
 
   async function submit() {
@@ -53,8 +131,6 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
       const r = await fetch(`/api/exams/${attemptId}/submit`, { method: 'POST' })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(data?.error || 'Gagal submit')
-  
-      // ⬇️ setelah sukses, arahkan ke halaman hasil
       router.replace(`/exam/result/${attemptId}`)
     } catch (e: any) {
       setError(e.message ?? 'Gagal submit')
@@ -62,7 +138,12 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
       setLoading(false)
     }
   }
-  const answeredCount = Object.keys(answers).length
+
+  const answeredCount = Object.values(answers).filter(a =>
+    (a.selectedOptionIds && a.selectedOptionIds.length > 0) ||
+    (typeof a.valueText === 'string' && a.valueText.trim() !== '') ||
+    (typeof a.valueNumber === 'number')
+  ).length
   const total = qs.length
 
   if (!attemptId) return <div className="p-6">Attempt tidak valid.</div>
@@ -92,7 +173,7 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
           <h1 className="text-2xl font-bold text-red-700 mb-2">Ups, ada masalah</h1>
           <p className="text-red-700 text-sm mb-4">⚠️ {error}</p>
           <button
-            onClick={() => router.refresh()}
+            onClick={() => location.reload()}
             className="w-full rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold py-3"
           >
             Coba Muat Ulang
@@ -111,11 +192,12 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
             <h1 className="text-xl md:text-2xl font-extrabold text-blue-700 tracking-tight flex items-center gap-2">
               <span aria-hidden>📝</span> Mengerjakan Ujian
             </h1>
-            {typeof timeLimitMin === 'number' && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-blue-50 text-blue-700 text-xs px-3 py-1 border border-blue-200">
-                ⏱️ Waktu: {timeLimitMin} menit
-              </span>
-            )}
+{typeof timeLimitMin === 'number' && (
+  <span className={`ml-2 inline-flex items-center rounded-full ${expired ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200'} text-xs px-3 py-1 border`}>
+    ⏱️ {timeBadge ?? `${timeLimitMin} menit`}
+  </span>
+)}
+
           </div>
           <div className="text-sm text-gray-600">
             Terjawab: <span className="font-semibold text-gray-800">{answeredCount}</span> / {total}
@@ -129,10 +211,7 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
           <div key={q.id} className="bg-white border border-blue-100 rounded-2xl p-4 md:p-6 shadow-sm">
             <div className="flex items-start gap-3 mb-3">
               <div className="shrink-0">
-                <span
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white font-bold"
-                  aria-label={`Soal nomor ${q.order}`}
-                >
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white font-bold">
                   {q.order}
                 </span>
               </div>
@@ -149,30 +228,92 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
               </div>
             )}
 
-            <fieldset className="grid md:grid-cols-2 gap-3" aria-label={`Pilihan jawaban untuk soal ${q.order}`}>
-              {q.options.map(o => {
-                const checked = answers[q.id] === o.id
-                return (
-                  <label
-                    key={o.id}
-                    className={`cursor-pointer rounded-xl border p-3 md:p-4 flex gap-3 items-start transition
-                      ${checked ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
-                  >
-                    <input
-                      type="radio"
-                      name={q.id}
-                      value={o.id}
-                      checked={checked}
-                      onChange={() => choose(q.id, o.id)}
-                      className="mt-1"
-                    />
-                    <span className="text-gray-800">
-                      <span className="font-semibold">{o.label}.</span> {o.text}
-                    </span>
-                  </label>
-                )
-              })}
-            </fieldset>
+            {/* Render input sesuai tipe */}
+            {q.type === 'SINGLE_CHOICE' && (
+              <fieldset className="grid md:grid-cols-2 gap-3">
+                {q.options.map(o => {
+                  const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
+                  return (
+                    <label key={o.id} className={`cursor-pointer rounded-xl border p-3 md:p-4 flex gap-3 items-start transition
+                      ${checked ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}>
+                      <input type="radio" disabled={expired} name={q.id} value={o.id} checked={checked} onChange={() => chooseSingle(q.id, o.id)} className="mt-1" />
+                      <span className="text-gray-800"><span className="font-semibold">{o.label}.</span> {o.text}</span>
+                    </label>
+                  )
+                })}
+              </fieldset>
+            )}
+
+            {q.type === 'MULTI_SELECT' && (
+              <fieldset className="grid md:grid-cols-2 gap-3">
+                {q.options.map(o => {
+                  const selected = (answers[q.id]?.selectedOptionIds ?? []).includes(o.id)
+                  return (
+                    <label key={o.id} className={`cursor-pointer rounded-xl border p-3 md:p-4 flex gap-3 items-start transition
+                      ${selected ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}>
+                      <input type="checkbox" disabled={expired} checked={selected} onChange={() => toggleMulti(q.id, o.id)} className="mt-1" />
+                      <span className="text-gray-800"><span className="font-semibold">{o.label}.</span> {o.text}</span>
+                    </label>
+                  )
+                })}
+              </fieldset>
+            )}
+
+            {q.type === 'TRUE_FALSE' && (
+              <fieldset className="grid md:grid-cols-2 gap-3">
+                {q.options.map(o => {
+                  const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
+                  return (
+                    <label key={o.id} className={`cursor-pointer rounded-xl border p-3 md:p-4 flex gap-3 items-start transition
+                      ${checked ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}>
+                      <input type="radio" disabled={expired} name={q.id} value={o.id} checked={checked} onChange={() => chooseSingle(q.id, o.id)} className="mt-1" />
+                      <span className="text-gray-800">{o.text}</span>
+                    </label>
+                  )
+                })}
+              </fieldset>
+            )}
+
+            {(q.type === 'SHORT_TEXT' || q.type === 'ESSAY') && (
+              <div>
+                <textarea
+                  rows={q.type === 'ESSAY' ? 6 : 3}
+                  value={answers[q.id]?.valueText ?? ''}
+                  onChange={(e) => setText(q.id, e.target.value)}
+                  placeholder={q.type === 'ESSAY' ? 'Tulis jawaban esai kamu…' : 'Jawaban singkat…'}
+                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5"
+                  disabled={expired}
+                />
+              </div>
+            )}
+
+            {q.type === 'NUMBER' && (
+              <div className="max-w-sm">
+                <input
+                  type="number"
+                  value={answers[q.id]?.valueNumber ?? ''}
+                  onChange={(e) => setNumber(q.id, e.target.value)}
+                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5"
+                  placeholder="Masukkan angka"
+                  disabled={expired}
+                />
+              </div>
+            )}
+
+            {q.type === 'RANGE' && (
+              <div className="max-w-sm grid gap-2">
+                <input
+                  type="number"
+                  value={answers[q.id]?.valueNumber ?? ''}
+                  onChange={(e) => setNumber(q.id, e.target.value)}
+                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5"
+                  placeholder={`Nilai antara ${(q.settings?.min ?? 'min')} – ${(q.settings?.max ?? 'max')}`}
+                />
+                <div className="text-xs text-gray-600">
+                  Rentang: {q.settings?.min} – {q.settings?.max} {q.settings?.step ? `(step ${q.settings.step})` : ''}
+                </div>
+              </div>
+            )}
           </div>
         ))}
 

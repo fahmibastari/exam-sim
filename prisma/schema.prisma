@@ -12,11 +12,21 @@ enum Role {
   USER
 }
 
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTI_SELECT
+  TRUE_FALSE
+  SHORT_TEXT
+  ESSAY
+  NUMBER
+  RANGE
+}
+
 model User {
   id        String    @id @default(cuid())
   email     String    @unique
   name      String?
-  password  String // hashed (bcrypt)
+  password  String
   role      Role      @default(USER)
   createdAt DateTime  @default(now())
   attempts  Attempt[]
@@ -26,68 +36,87 @@ model ExamPackage {
   id           String     @id @default(cuid())
   title        String
   description  String?
-  // simpan hash token, bukan token mentah
   tokenHash    String
   isActive     Boolean    @default(true)
-  timeLimitMin Int? // opsional timer
+  timeLimitMin Int?
   createdAt    DateTime   @default(now())
   questions    Question[]
   attempts     Attempt[]
 }
 
 model Question {
-  id              String         @id @default(cuid())
-  examPackageId   String
-  order           Int
-  text            String
-  imageUrl        String?
-  options         AnswerOption[]
-  correctOptionId String // tetap sebagai String sederhana
+  id            String        @id @default(cuid())
+  examPackageId String
+  order         Int
+  text          String
+  imageUrl      String?
 
-  ExamPackage ExamPackage @relation(fields: [examPackageId], references: [id], onDelete: Cascade)
+  // BARU:
+  type          QuestionType  @default(SINGLE_CHOICE)
+  points        Int           @default(1)
+  required      Boolean       @default(true)
+  settings      Json?
 
-  answers AttemptAnswer[]
+  options       AnswerOption[]
+  answers       AttemptAnswer[]
+
+  ExamPackage   ExamPackage   @relation(fields: [examPackageId], references: [id], onDelete: Cascade)
+
+  @@unique([examPackageId, order])
 }
 
 model AnswerOption {
-  id         String @id @default(cuid())
+  id         String    @id @default(cuid())
   questionId String
-  label      String // "A" | "B" | "C" | "D"
+  label      String
   text       String
 
-  Question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  // BARU:
+  isCorrect  Boolean   @default(false)
+
+  Question   Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([questionId, label])
 }
 
 model Attempt {
-  id            String    @id @default(cuid())
-  userId        String?
-  examPackageId String
-  startedAt     DateTime  @default(now())
-  submittedAt   DateTime?
-  score         Int?
-  total         Int?
+  id             String     @id @default(cuid())
+  userId         String?
+  examPackageId  String
+  startedAt      DateTime   @default(now())
+  submittedAt    DateTime?
 
-  // Peserta non-login
+  // Ubah ke Float utk partial credit
+  score          Float?
+  total          Float?
+
   participantName  String?
   participantEmail String?
   participantInfo  String?
 
-  User        User?           @relation(fields: [userId], references: [id])
-  ExamPackage ExamPackage     @relation(fields: [examPackageId], references: [id])
+  User        User?        @relation(fields: [userId], references: [id])
+  ExamPackage ExamPackage  @relation(fields: [examPackageId], references: [id])
   answers     AttemptAnswer[]
 
-  @@unique([userId, examPackageId]) // untuk user yang login
-  @@unique([examPackageId, participantEmail]) // opsional: cegah email sama ikut paket sama
+  @@unique([userId, examPackageId])
+  @@unique([examPackageId, participantEmail])
   @@index([examPackageId])
 }
 
 model AttemptAnswer {
-  id         String @id @default(cuid())
-  attemptId  String
-  questionId String
-  optionId   String // opsi yang dipilih user
+  id                String   @id @default(cuid())
+  attemptId         String
+  questionId        String
+
+  // sebelumnya: selectedOptionIds String[]
+  selectedOptionIds String[] @default([]) // ✅ default []
+
+  valueText   String?
+  valueNumber Float?
+  valueJson   Json?
+
+  score    Float?
+  gradedAt DateTime?
 
   Attempt  Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   Question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
@@ -95,3 +124,4 @@ model AttemptAnswer {
   @@unique([attemptId, questionId])
   @@index([questionId])
 }
+
