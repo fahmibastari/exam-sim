@@ -6,19 +6,19 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+export const runtime = 'nodejs'
+
 const UpdateSchema = z.object({
   title: z.string().trim().min(3, 'Judul minimal 3 huruf'),
   description: z.preprocess(
     v => (typeof v === 'string' && v.trim() === '' ? undefined : v),
     z.string().trim().max(2000).optional()
   ),
-  // "" => undefined, kalau isi harus int >= 1
   timeLimitMin: z.union([
     z.literal('').transform(() => undefined),
     z.coerce.number().int().min(1, 'Batas menit minimal 1'),
   ]).optional(),
   isActive: z.enum(['true', 'false']).transform(v => v === 'true'),
-  // Kosongkan jika tidak ingin mengganti token
   newToken: z.preprocess(
     v => (typeof v === 'string' && v.trim() === '' ? undefined : v),
     z.string().trim().min(4, 'Token minimal 4 karakter').optional()
@@ -26,9 +26,10 @@ const UpdateSchema = z.object({
 })
 
 export default async function PackageSettingsPage(
-    props: { params: Promise<{ id: string }> }
-  ) {
-    const { id } = await props.params;
+  props: { params: Promise<{ id: string }> }
+) {
+  const { id } = await props.params
+
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.role !== 'ADMIN') redirect('/login')
 
@@ -60,7 +61,7 @@ export default async function PackageSettingsPage(
       data.tokenHash = await bcrypt.hash(newToken, 10)
     }
 
-    await prisma.examPackage.update({ where: { id }, data }) // ✅ pakai id
+    await prisma.examPackage.update({ where: { id }, data })
     revalidatePath('/admin/packages')
     revalidatePath(`/admin/packages/${id}`)
     revalidatePath(`/admin/packages/${id}/settings`)
@@ -70,41 +71,52 @@ export default async function PackageSettingsPage(
     'use server'
     const confirm = String(formData.get('confirm') ?? '')
     if (confirm !== 'DELETE') throw new Error('Ketik DELETE untuk konfirmasi.')
-        await prisma.examPackage.delete({ where: { id } })
+    await prisma.examPackage.delete({ where: { id } })
     revalidatePath('/admin/packages')
     redirect('/admin/packages')
   }
 
+  // UI helpers
+  const inputCls =
+    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30'
+  const cardCls = 'rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200'
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+    <main className="min-h-screen bg-neutral-50">
+      <section className="mx-auto max-w-6xl space-y-8 px-6 py-8">
         {/* Header */}
+        <a
+            href="/admin/packages"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Kembali ke Daftar Paket
+          </a>
         <div>
-          <h1 className="text-3xl font-extrabold text-blue-700 tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
             Pengaturan Paket — {pkg.title}
           </h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Edit judul, deskripsi, token, batas waktu, dan status publish.
+          <p className="mt-1 text-sm text-gray-600">
+            Edit judul, deskripsi, token, batas waktu, dan status publikasi.
           </p>
         </div>
 
         {/* Form Update */}
-        <form action={updatePackage} className="bg-white rounded-2xl shadow-lg border border-blue-100 p-5 grid gap-4" noValidate>
+        <form action={updatePackage} className={cardCls} noValidate>
           <h2 className="text-lg font-semibold text-gray-900">Edit Paket</h2>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-800">Judul</label>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Judul</label>
               <input
                 name="title"
                 defaultValue={pkg.title}
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5 text-black"
+                className={inputCls}
                 required
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-800">Batas menit (opsional)</label>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Batas menit (opsional)</label>
               <input
                 name="timeLimitMin"
                 type="number"
@@ -112,76 +124,91 @@ export default async function PackageSettingsPage(
                 step={1}
                 defaultValue={typeof pkg.timeLimitMin === 'number' ? pkg.timeLimitMin : ''}
                 placeholder="Kosongkan jika tanpa batas"
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5 text-black"
+                className={inputCls}
               />
-              <p className="text-[12px] text-gray-500">Biarkan kosong bila tanpa batas waktu.</p>
+              <p className="mt-1 text-[12px] text-gray-500">Biarkan kosong untuk tanpa batas waktu.</p>
             </div>
 
-            <div className="sm:col-span-2 space-y-1.5">
-              <label className="block text-sm font-medium text-gray-800">Deskripsi (opsional)</label>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-800">Deskripsi (opsional)</label>
               <textarea
                 name="description"
                 defaultValue={pkg.description ?? ''}
                 rows={3}
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5 text-black"
+                className={inputCls}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-800">Status</label>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Status</label>
               <select
                 name="isActive"
                 defaultValue={pkg.isActive ? 'true' : 'false'}
-                className="w-40 rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5"
+                className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               >
                 <option value="true">Published</option>
                 <option value="false">Draft</option>
               </select>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-800">Ganti Token (plaintext, opsional)</label>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Ganti Token (plaintext, opsional)</label>
               <input
                 name="newToken"
                 placeholder="Kosongkan jika tidak diganti"
                 autoComplete="off"
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5 text-black"
+                className={inputCls}
               />
-              <p className="text-[12px] text-gray-500">Jika diisi, token akan di-hash ulang saat disimpan.</p>
+              <p className="mt-1 text-[12px] text-gray-500">Jika diisi, token akan di-hash ulang saat disimpan.</p>
             </div>
           </div>
 
-          <div className="pt-2">
-            <button className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 shadow-md focus:outline-none focus:ring-4 focus:ring-blue-200">
+          <div className="pt-3">
+            <button
+              className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
               Simpan Perubahan
             </button>
             <a
               href={`/admin/packages/${pkg.id}`}
-              className="ml-3 inline-flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-4 py-3 border border-gray-200"
+              className="ml-3 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
             >
-              ← Kelola Soal
+              Kelola Soal
             </a>
           </div>
         </form>
 
         {/* Danger Zone */}
-        <div className="bg-white rounded-2xl shadow-lg border border-red-100 p-5">
+        <div className="rounded-2xl border border-red-100 bg-white p-6 shadow-sm">
           <h3 className="text-base font-semibold text-red-700">Hapus Paket</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="mt-1 text-sm text-gray-600">
             Menghapus paket akan menghapus semua soal, opsi, dan attempt yang terkait. Tindakan ini tidak dapat dibatalkan.
           </p>
           <form action={deletePackage} className="mt-3 flex items-center gap-3">
             <input
               name="confirm"
               placeholder='Ketik "DELETE" untuk konfirmasi'
-              className="flex-1 rounded-xl border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 p-2.5"
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30"
             />
-            <button className="rounded-xl border border-red-300 text-red-700 hover:bg-red-50 font-semibold py-2.5 px-4">
+            <button className="rounded-lg border border-red-300 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50">
               Hapus Paket
             </button>
           </form>
         </div>
-      </div>
-    </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="mt-12 border-t bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-6 text-center md:flex-row md:text-left">
+          <p className="text-xs text-gray-500">
+            © {new Date().getFullYear()} Simulasi Ujian — Platform simulasi ujian untuk siswa.
+          </p>
+          <p className="text-xs text-gray-500">
+            Dibuat oleh <span className="font-medium text-gray-700">fahmibastari</span> &{' '}
+            <span className="font-medium text-gray-700">qorrieaina</span>.
+          </p>
+        </div>
+      </footer>
+    </main>
   )
 }

@@ -18,7 +18,7 @@ const CreateSchema = z.object({
   ]).optional(),
 })
 
-// NEW: schema untuk edit paket (token opsional; kosong = tidak mengubah)
+// Schema edit paket (token opsional; kosong = tidak mengubah)
 const UpdateSchema = z.object({
   id: z.string().min(1, 'ID tidak valid'),
   title: z.string().trim().min(3, 'Judul minimal 3 huruf'),
@@ -27,7 +27,7 @@ const UpdateSchema = z.object({
     z.string().trim().max(2000).optional()
   ),
   token: z.union([
-    z.literal('').transform(() => undefined),                       // kosong = tidak ganti token
+    z.literal('').transform(() => undefined), // kosong = tidak ganti token
     z.string().trim().min(4, 'Token minimal 4 karakter'),
   ]).optional(),
   timeLimitMin: z.union([
@@ -40,6 +40,7 @@ export default async function AdminPackagesPage() {
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.role !== 'ADMIN') redirect('/login')
 
+  // ===== Actions =====
   async function createPackage(formData: FormData) {
     'use server'
     const raw = Object.fromEntries(formData.entries())
@@ -66,11 +67,9 @@ export default async function AdminPackagesPage() {
     revalidatePath('/admin/packages')
   }
 
-  // NEW: edit paket
   async function updatePackage(formData: FormData) {
     'use server'
     const raw = Object.fromEntries(formData.entries())
-    // normalisasi kosong -> undefined untuk timeLimitMin & token sudah di schema
     const parsed = UpdateSchema.safeParse(raw)
     if (!parsed.success) {
       const msg = parsed.error.issues.map(i => i.message).join(', ')
@@ -78,15 +77,12 @@ export default async function AdminPackagesPage() {
     }
 
     const { id, title, description, token, timeLimitMin } = parsed.data
-
-    // siapkan payload update dasar
     const data: any = {
       title,
       description: description ?? null,
       timeLimitMin: typeof timeLimitMin === 'number' ? timeLimitMin : null,
     }
 
-    // jika token diisi, hash lalu update tokenHash
     if (typeof token === 'string' && token.length > 0) {
       const bcrypt = (await import('bcryptjs')).default
       data.tokenHash = await bcrypt.hash(token, 10)
@@ -110,88 +106,101 @@ export default async function AdminPackagesPage() {
     select: {
       id: true,
       title: true,
-      description: true,              // UPDATED: untuk prefilling edit
+      description: true,
       isActive: true,
       timeLimitMin: true,
-      _count: { select: { questions: true, attempts: true } }
-    }
+      _count: { select: { questions: true, attempts: true } },
+    },
   })
 
+  // ===== UI helpers =====
+  const inputCls =
+    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30'
+  const cardCls = 'rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200'
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+    <main className="min-h-screen bg-neutral-50">
+      {/* Top Nav */}
+      
+
+      <section className="mx-auto max-w-6xl px-6 py-8 space-y-8">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-extrabold text-blue-700 tracking-tight">
-              Admin — Paket Soal
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Kelola paket ujian, token, dan batas waktu. ✨
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Admin — Paket Soal</h1>
+            <p className="mt-1 text-sm text-gray-600">
+              Kelola paket ujian, token, dan batas waktu.
             </p>
           </div>
         </div>
 
         {/* Create Card */}
-        <form
-          action={createPackage}
-          className="bg-white rounded-2xl shadow-lg border border-blue-100 p-5 grid gap-4"
-        >
+        <form action={createPackage} className={cardCls}>
           <h2 className="text-lg font-semibold text-gray-900">Buat Paket Baru</h2>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label htmlFor="title" className="block text-sm font-medium text-gray-800">Judul paket</label>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="title" className="mb-1 block text-sm font-medium text-gray-800">
+                Judul paket
+              </label>
               <input
                 id="title"
                 name="title"
                 placeholder="Contoh: Matematika Kelas 6"
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5 text-black" // UPDATED: border-gray-300
+                className={inputCls}
                 required
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="timeLimitMin" className="block text-sm font-medium text-gray-800">Batas menit (opsional)</label>
+            <div>
+              <label htmlFor="timeLimitMin" className="mb-1 block text-sm font-medium text-gray-800">
+                Batas menit (opsional)
+              </label>
               <input
-                id="timeLimitMin" // NEW: id sesuai label
+                id="timeLimitMin"
                 name="timeLimitMin"
                 type="number"
                 min={1}
                 step={1}
-                placeholder="Batas menit (opsional)"
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5 text-black" // UPDATED
+                placeholder="Biarkan kosong bila tanpa batas"
+                className={inputCls}
               />
-              <p className="text-[12px] text-black">Biarkan kosong bila tanpa batas waktu.</p>
+              <p className="mt-1 text-[12px] text-gray-500">Kosongkan untuk tanpa batas waktu.</p>
             </div>
 
-            <div className="sm:col-span-2 space-y-1.5">
-              <label htmlFor="description" className="block text-sm font-medium text-gray-800">Deskripsi (opsional)</label>
+            <div className="sm:col-span-2">
+              <label htmlFor="description" className="mb-1 block text-sm font-medium text-gray-800">
+                Deskripsi (opsional)
+              </label>
               <textarea
                 id="description"
                 name="description"
                 placeholder="Keterangan singkat paket..."
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5 text-black" // UPDATED
                 rows={3}
+                className={inputCls}
               />
             </div>
 
-            <div className="sm:col-span-2 space-y-1.5">
-              <label htmlFor="token" className="block text-sm font-medium text-gray-800">Token paket (plaintext)</label>
+            <div className="sm:col-span-2">
+              <label htmlFor="token" className="mb-1 block text-sm font-medium text-gray-800">
+                Token paket (plaintext)
+              </label>
               <input
                 id="token"
                 name="token"
                 placeholder="Contoh: ABCD1234"
                 autoComplete="off"
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5 text-black" // UPDATED
+                className={inputCls}
                 required
               />
-              <p className="text-[12px] text-gray-500">Token akan otomatis di-hash ketika disimpan.</p>
+              <p className="mt-1 text-[12px] text-gray-500">Token akan otomatis di-hash ketika disimpan.</p>
             </div>
           </div>
 
-          <div className="pt-2">
-            <button className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 shadow-md focus:outline-none focus:ring-4 focus:ring-blue-200">
+          <div className="pt-3">
+            <button
+              className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
               Simpan
             </button>
           </div>
@@ -201,44 +210,54 @@ export default async function AdminPackagesPage() {
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-gray-900">Daftar Paket</h2>
 
-          <ul className="bg-white rounded-2xl shadow-lg border border-blue-100 divide-y">
-            {pkgs.map((p) => (
-              <li key={p.id} className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <ul className="divide-y rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
+            {pkgs.map((p: typeof pkgs[number]) => (
+              <li key={p.id} className="flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-start">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <div className="font-semibold truncate text-black">{p.title}</div>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs border
-                      ${p.isActive
-                        ? 'bg-green-50 text-green-700 border-green-200'
-                        : 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                    <div className="truncate font-semibold text-gray-900">{p.title}</div>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${
+                        p.isActive
+                          ? 'border-green-200 bg-green-50 text-green-700'
+                          : 'border-gray-200 bg-gray-50 text-gray-700'
+                      }`}
+                    >
                       {p.isActive ? 'Published' : 'Draft'}
                     </span>
                     {typeof p.timeLimitMin === 'number' && (
-                      <span className="inline-flex items-center rounded-full bg-blue-50 text-blue-700 text-xs px-2 py-0.5 border border-blue-200">
-                        ⏱️ {p.timeLimitMin} mnt
+                      <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                        {p.timeLimitMin} mnt
                       </span>
                     )}
                   </div>
-                  <div className="text-sm text-gray-600 mt-1">
+                  <div className="mt-1 text-sm text-gray-600">
                     Soal: {p._count.questions} · Attempt: {p._count.attempts}
                   </div>
+                  {p.description && (
+                    <p className="mt-1 line-clamp-2 text-sm text-gray-500">{p.description}</p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-3">
                   <a
                     href={`/admin/packages/${p.id}`}
-                    className="inline-flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-3 py-2 border border-gray-200"
+                    className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
                   >
                     Kelola Soal
                   </a>
-                    {/* NEW: Kelola Paket */}
-  <a href={`/admin/packages/${p.id}/settings`}
-     className="inline-flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-3 py-2 border border-gray-200">
-    Kelola Paket
-  </a>
+
+                  {/* Kelola Paket */}
+                  <a
+                    href={`/admin/packages/${p.id}/settings`}
+                    className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
+                  >
+                    Kelola Paket
+                  </a>
+
                   <a
                     href={`/admin/packages/${p.id}/results`}
-                    className="inline-flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-3 py-2 border border-gray-200"
+                    className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
                   >
                     Peserta & Nilai
                   </a>
@@ -247,10 +266,11 @@ export default async function AdminPackagesPage() {
                     <input type="hidden" name="id" value={p.id} />
                     <input type="hidden" name="to" value={(!p.isActive).toString()} />
                     <button
-                      className={`rounded-xl font-medium px-3 py-2 border
-                        ${p.isActive
-                          ? 'bg-white text-red-600 border-red-200 hover:bg-red-50'
-                          : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'}`}
+                      className={`rounded-lg px-3 py-2 text-sm font-medium transition border ${
+                        p.isActive
+                          ? 'border-red-200 bg-white text-red-600 hover:bg-red-50'
+                          : 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
                     >
                       {p.isActive ? 'Unpublish' : 'Publish'}
                     </button>
@@ -260,8 +280,20 @@ export default async function AdminPackagesPage() {
             ))}
           </ul>
         </div>
+      </section>
 
-      </div>
-    </div>
+      {/* Footer */}
+      <footer className="mt-12 border-t bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-6 text-center md:flex-row md:text-left">
+          <p className="text-xs text-gray-500">
+            © {new Date().getFullYear()} Simulasi Ujian — Platform simulasi ujian untuk siswa.
+          </p>
+          <p className="text-xs text-gray-500">
+            Dibuat oleh <span className="font-medium text-gray-700">fahmibastari</span> &{' '}
+            <span className="font-medium text-gray-700">qorrieaina</span>.
+          </p>
+        </div>
+      </footer>
+    </main>
   )
 }

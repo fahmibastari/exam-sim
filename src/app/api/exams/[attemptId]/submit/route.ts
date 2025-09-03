@@ -1,16 +1,24 @@
 // src/app/api/exams/[attemptId]/submit/route.ts
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-export async function POST(_: Request, { params }: { params: { attemptId: string } }) {
+export const POST = async (
+  _req: Request,
+  { params }: { params: Promise<{ attemptId: string }> }
+) => {
+  const { attemptId } = await params
+
   const attempt = await prisma.attempt.findUnique({
-    where: { id: params.attemptId },
-    include: {
-      ExamPackage: true,
-      answers: true,
-    },
+    where: { id: attemptId },
+    include: { ExamPackage: true, answers: true },
   })
   if (!attempt) return NextResponse.json({ error: 'Attempt tidak ditemukan' }, { status: 404 })
+  if (attempt.submittedAt) {
+    return NextResponse.json({ ok: true, score: attempt.score ?? 0, total: attempt.total ?? 0 })
+  }
 
   // Ambil soal+opsi untuk paket attempt ini
   const questions = await prisma.question.findMany({
@@ -47,6 +55,7 @@ if (unansweredRequired.length > 0) {
     { status: 400 }
   )
 }
+
 
 function grade(q: typeof questions[number], a: (typeof answers)[number] | undefined): number {
   totalPoints += q.points

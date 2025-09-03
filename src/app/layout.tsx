@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Providers from './providers'
-import './globals.css' // kalau ada
+import './globals.css'
 
 export const metadata: Metadata = { title: 'Exam Sim', description: 'Simulasi ujian' }
 

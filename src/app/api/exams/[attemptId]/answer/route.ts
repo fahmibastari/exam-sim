@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'    // ⬅️ jangan di-cache
+export const revalidate = 0               // ⬅️ hard no-cache
+
 // src/app/api/exams/[attemptId]/answer/route.ts
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -9,11 +12,10 @@ type Body = {
   valueNumber?: number | null  // number/range
 }
 
-export async function POST(req: Request, { params }: { params: { attemptId: string } }) {
-  const attemptId = params.attemptId
-  const body = (await req.json()) as Body
+export async function POST(_req: Request, ctx: { params: Promise<{ attemptId: string }> }) {
+  const { attemptId } = await ctx.params
 
-  // Validasi minimal
+  const body = (await _req.json()) as Body
   if (!body?.questionId) {
     return NextResponse.json({ error: 'questionId wajib diisi' }, { status: 400 })
   }
@@ -23,6 +25,9 @@ export async function POST(req: Request, { params }: { params: { attemptId: stri
     include: { ExamPackage: true },
   })
   if (!attempt) return NextResponse.json({ error: 'Attempt tidak ditemukan' }, { status: 404 })
+  if (attempt.submittedAt) {
+    return NextResponse.json({ error: 'Attempt sudah disubmit' }, { status: 409 })
+  }
 
   const q = await prisma.question.findUnique({
     where: { id: body.questionId },
@@ -82,6 +87,11 @@ if (typeof limit === 'number' && Number.isFinite(limit)) {
     case 'NUMBER':
     case 'RANGE': {
       const n = body.valueNumber
+      if (n === null) {
+        valueNumber = null
+        break
+      }
+
       if (typeof n !== 'number' || !Number.isFinite(n)) {
         return NextResponse.json({ error: 'Nilai angka tidak valid' }, { status: 400 })
       }

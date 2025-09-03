@@ -1,3 +1,6 @@
+// src/app/admin/packages/[id]/page.tsx
+export const runtime = 'nodejs'
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { redirect } from 'next/navigation'
@@ -25,42 +28,71 @@ const QuestionTypeEnum = z.enum([
 const BaseQSchema = z.object({
   order: z.coerce.number().int().positive(),
   text: z.string().min(3),
-  image: z.any().optional(), // akan dipersempit saat upload
+  image: z.any().optional(),
   type: QuestionTypeEnum,
   points: z.coerce.number().int().min(0).default(1),
   required: BoolFromCheckbox.default(false),
 })
 
-// Tambahan field opsional per tipe (akan dipakai sesuai branch):
+// ====== preprocess agar null -> '' untuk field opsional ======
+const toEmpty = (v: unknown) => (v === null || v === undefined ? '' : v)
+
+// string opsional tapi kalau ada harus non-empty
+const OptionalNonEmpty = z.preprocess(
+  toEmpty,
+  z.union([z.literal(''), z.string().min(1)])
+)
+
+// enum atau empty string
+const EnumOrEmpty = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(toEmpty, z.union([z.literal(''), z.enum(values as any)]))
+
+// number helpers (menerima '' juga)
+const NumOrEmpty = z.preprocess(
+  toEmpty,
+  z.union([z.literal(''), z.coerce.number()])
+)
+const NumMin0OrEmpty = z.preprocess(
+  toEmpty,
+  z.union([z.literal(''), z.coerce.number().min(0)])
+)
+const IntPosOrEmpty = z.preprocess(
+  toEmpty,
+  z.union([z.literal(''), z.coerce.number().int().positive()])
+)
+
+// Tambahan field opsional per tipe
 const OptionsSchema = z.object({
-  A: z.string().min(1).optional(),
-  B: z.string().min(1).optional(),
-  C: z.string().min(1).optional(),
-  D: z.string().min(1).optional(),
-  correctLabel: z.enum(['A', 'B', 'C', 'D']).optional(),        // SINGLE_CHOICE
-  // MULTI_SELECT: checkbox bernama "correctMulti"
+  A: OptionalNonEmpty.optional(),
+  B: OptionalNonEmpty.optional(),
+  C: OptionalNonEmpty.optional(),
+  D: OptionalNonEmpty.optional(),
+  correctLabel: EnumOrEmpty(['A', 'B', 'C', 'D'] as const).optional(),
 })
 
 const TrueFalseSchema = z.object({
-  tfTrueText: z.string().min(1).default('Benar').optional(),
-  tfFalseText: z.string().min(1).default('Salah').optional(),
-  correctTF: z.enum(['TRUE', 'FALSE']).optional(),
+  tfTrueText: OptionalNonEmpty.optional(),
+  tfFalseText: OptionalNonEmpty.optional(),
+  correctTF: EnumOrEmpty(['TRUE', 'FALSE'] as const).optional(),
 })
 
 const NumberSchema = z.object({
-  tolerance: z.union([z.literal(''), z.coerce.number().min(0)]).optional(),
-  targetNumber: z.union([z.literal(''), z.coerce.number()]).optional(), // NEW
+  tolerance: NumMin0OrEmpty.optional(),
+  targetNumber: NumOrEmpty.optional(),
 })
 
 const RangeSchema = z.object({
-  min: z.union([z.literal(''), z.coerce.number()]).optional(),
-  max: z.union([z.literal(''), z.coerce.number()]).optional(),
-  step: z.union([z.literal(''), z.coerce.number().positive()]).optional(),
+  min: NumOrEmpty.optional(),
+  max: NumOrEmpty.optional(),
+  step: z.preprocess(
+    toEmpty,
+    z.union([z.literal(''), z.coerce.number().positive()])
+  ).optional(),
 })
 
 const ShortTextSchema = z.object({
   caseSensitive: BoolFromCheckbox.default(false).optional(),
-  maxLength: z.union([z.literal(''), z.coerce.number().int().positive()]).optional(),
+  maxLength: IntPosOrEmpty.optional(),
 })
 
 const CreateSchema = BaseQSchema
@@ -70,39 +102,46 @@ const CreateSchema = BaseQSchema
   .and(RangeSchema)
   .and(ShortTextSchema)
 
-  const EditSchema = CreateSchema.and(z.object({ id: z.string().min(1) }))
+const EditSchema = CreateSchema.and(z.object({ id: z.string().min(1) }))
 
+// tipe opsi, biar rapi
+type OptionRow = { id: string; label: 'A'|'B'|'C'|'D'; text: string; isCorrect: boolean }
+
+// Infer TransactionClient TANPA mengimpor Prisma.* (aman di index-browser)
+type Tx =
+  Extract<Parameters<typeof prisma.$transaction>[0], (arg: any) => any> extends
+    (arg: infer A) => any ? A : never
 
 // ===== Page component =====
-export default async function EditPackagePage({ params }: { params: { id: string } }) {
+export default async function EditPackagePage(
+  props: { params: Promise<{ id: string }> }
+) {
+  const { id } = await props.params
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.role !== 'ADMIN') redirect('/login')
 
-  const pkg = await prisma.examPackage.findUnique({ where: { id: params.id } })
+  const pkg = await prisma.examPackage.findUnique({ where: { id } })
   if (!pkg) redirect('/admin/packages')
 
   async function uploadImage(pkgId: string, file: File | null | undefined) {
     'use server'
     if (!file || (file as any).size === 0) return undefined
 
-    // Validasi ringan
-    const size = (file as any).size as number
-    const type = (file as any).type as string | undefined
-    if (size > 5 * 1024 * 1024) throw new Error('Maksimal ukuran gambar 5MB')
-    if (type && !/^image\/(png|jpe?g|webp|gif)$/.test(type)) {
-      throw new Error('Format gambar tidak didukung')
-    }
+    const maxBytes = 2 * 1024 * 1024 // 2MB
+    const okTypes = new Set(['image/png', 'image/jpeg', 'image/webp'])
+    const mime = (file as any).type || ''
 
-    const safeName = ((file as any).name ?? 'img').toString().replace(/[^\w.\-]+/g, '_')
+    if (!okTypes.has(mime)) throw new Error('Tipe gambar harus PNG/JPEG/WEBP')
+    if ((file as any).size > maxBytes) throw new Error('Ukuran gambar maks 2MB')
+
+    const safeName = String((file as any).name || 'img').replace(/[^\w.\-]+/g, '_')
     const fileName = `${pkgId}/${Date.now()}_${safeName}`
 
     const { data, error } = await supabaseAdmin
       .storage.from('exam-images')
-      .upload(fileName, file as any, {
-        upsert: false,
-        contentType: type || 'application/octet-stream',
-      })
+      .upload(fileName, file as any, { upsert: false, contentType: mime })
     if (error) throw new Error('Upload gambar gagal: ' + error.message)
+
     const { data: pub } = supabaseAdmin.storage.from('exam-images').getPublicUrl(data.path)
     return pub.publicUrl
   }
@@ -110,7 +149,6 @@ export default async function EditPackagePage({ params }: { params: { id: string
   // ===== CREATE =====
   async function addQuestion(formData: FormData) {
     'use server'
-    // Kumpulkan array checkbox untuk MULTI_SELECT
     const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A'|'B'|'C'|'D'>
 
     const raw = {
@@ -133,16 +171,16 @@ export default async function EditPackagePage({ params }: { params: { id: string
       tfFalseText: formData.get('tfFalseText') || 'Salah',
       correctTF: formData.get('correctTF'),
 
-// number
-tolerance: formData.get('tolerance'),
-targetNumber: formData.get('targetNumber'), // NEW
+      // number
+      tolerance: formData.get('tolerance'),
+      targetNumber: formData.get('targetNumber'),
 
       // range
       min: formData.get('min'),
       max: formData.get('max'),
       step: formData.get('step'),
 
-      // short text
+      // short/essay
       caseSensitive: formData.get('caseSensitive'),
       maxLength: formData.get('maxLength'),
     }
@@ -151,17 +189,15 @@ targetNumber: formData.get('targetNumber'), // NEW
     if (!parsed.success) throw new Error('Data soal tidak valid')
 
     const p = parsed.data
-    const imageUrl = await uploadImage(params.id, p.image as File | null)
+    const imageUrl = await uploadImage(id, parsed.data.image as File | null)
 
-    // Siapkan payload per tipe
     type Opt = { label: string; text: string; isCorrect?: boolean }
 
-    let type = p.type
+    const type = p.type
     let options: Opt[] = []
     let settings: Record<string, any> | undefined = undefined
 
     if (type === 'SINGLE_CHOICE') {
-      // Wajib A-D terisi dan 1 correct
       const labels: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
       for (const L of labels) {
         const text = (p as any)[L]
@@ -207,9 +243,9 @@ targetNumber: formData.get('targetNumber'), // NEW
 
     if (type === 'NUMBER') {
       const tolerance = p.tolerance === '' || p.tolerance === undefined ? undefined : Number(p.tolerance)
-      const target = p.targetNumber === '' || p.targetNumber === undefined ? undefined : Number(p.targetNumber) // NEW
-      settings = { tolerance, target } // NEW
-    }    
+      const target = p.targetNumber === '' || p.targetNumber === undefined ? undefined : Number(p.targetNumber)
+      settings = { tolerance, target }
+    }
 
     if (type === 'RANGE') {
       const min = p.min === '' || p.min === undefined ? undefined : Number(p.min)
@@ -232,10 +268,9 @@ targetNumber: formData.get('targetNumber'), // NEW
       settings = { caseSensitive, maxLength }
     }
 
-    // Simpan
     await prisma.question.create({
       data: {
-        examPackageId: params.id,
+        examPackageId: id,
         order: p.order,
         text: p.text,
         imageUrl,
@@ -249,7 +284,7 @@ targetNumber: formData.get('targetNumber'), // NEW
       },
     })
 
-    revalidatePath(`/admin/packages/${params.id}`)
+    revalidatePath(`/admin/packages/${id}`)
   }
 
   // ===== UPDATE =====
@@ -277,7 +312,7 @@ targetNumber: formData.get('targetNumber'), // NEW
       correctTF: formData.get('correctTF'),
 
       tolerance: formData.get('tolerance'),
-targetNumber: formData.get('targetNumber'), // NEW
+      targetNumber: formData.get('targetNumber'),
 
       min: formData.get('min'),
       max: formData.get('max'),
@@ -287,7 +322,10 @@ targetNumber: formData.get('targetNumber'), // NEW
       maxLength: formData.get('maxLength'),
     }
     const parsed = EditSchema.safeParse(raw)
-    if (!parsed.success) throw new Error('Data edit tidak valid')
+    if (!parsed.success) {
+      console.error(parsed.error.flatten())
+      throw new Error('Data edit tidak valid')
+    }
     const p = parsed.data
 
     const q = await prisma.question.findUnique({
@@ -298,10 +336,9 @@ targetNumber: formData.get('targetNumber'), // NEW
 
     let imageUrl = q.imageUrl ?? undefined
     if (p.image && (p.image as any).size > 0) {
-      imageUrl = await uploadImage(params.id, p.image as File)
+      imageUrl = await uploadImage(id, p.image as File)
     }
 
-    // Hitung settings & options baru berdasarkan tipe
     let optionsPayload: Array<{ id?: string; label: string; text: string; isCorrect?: boolean }> = []
     let settings: Record<string, any> | undefined = undefined
     const type = p.type
@@ -313,7 +350,6 @@ targetNumber: formData.get('targetNumber'), // NEW
       type,
       points: p.points ?? 1,
       required: p.required ?? false,
-      settings: undefined as any,
     }
 
     if (type === 'SINGLE_CHOICE') {
@@ -324,7 +360,7 @@ targetNumber: formData.get('targetNumber'), // NEW
       }
       if (!p.correctLabel) throw new Error('Pilih jawaban benar')
       const byLabel: Record<'A'|'B'|'C'|'D', string|undefined> = { A: undefined, B: undefined, C: undefined, D: undefined }
-      q.options.forEach(o => {
+      q.options.forEach((o: OptionRow) => {
         if (['A','B','C','D'].includes(o.label)) (byLabel as any)[o.label] = o.id
       })
       optionsPayload = [
@@ -342,7 +378,7 @@ targetNumber: formData.get('targetNumber'), // NEW
         if (!text || String(text).trim() === '') throw new Error(`Opsi ${L} wajib diisi`)
       }
       const byLabel: Record<'A'|'B'|'C'|'D', string|undefined> = { A: undefined, B: undefined, C: undefined, D: undefined }
-      q.options.forEach(o => {
+      q.options.forEach((o: OptionRow) => {
         if (['A','B','C','D'].includes(o.label)) (byLabel as any)[o.label] = o.id
       })
       optionsPayload = [
@@ -357,10 +393,8 @@ targetNumber: formData.get('targetNumber'), // NEW
       const tTrue = (p.tfTrueText ?? 'Benar').toString()
       const tFalse = (p.tfFalseText ?? 'Salah').toString()
       if (!p.correctTF) throw new Error('Pilih jawaban benar (True/False)')
-
-      // cari opsi existing (pakai label A/B)
-      const optA = q.options.find(o => o.label === 'A')
-      const optB = q.options.find(o => o.label === 'B')
+      const optA = q.options.find((o: OptionRow) => o.label === 'A')
+      const optB = q.options.find((o: OptionRow) => o.label === 'B')
       optionsPayload = [
         { id: optA?.id, label: 'A', text: tTrue,  isCorrect: p.correctTF === 'TRUE' },
         { id: optB?.id, label: 'B', text: tFalse, isCorrect: p.correctTF === 'FALSE' },
@@ -369,10 +403,9 @@ targetNumber: formData.get('targetNumber'), // NEW
 
     if (type === 'NUMBER') {
       const tolerance = p.tolerance === '' || p.tolerance === undefined ? undefined : Number(p.tolerance)
-      const target = p.targetNumber === '' || p.targetNumber === undefined ? undefined : Number(p.targetNumber) // NEW
-      settings = { tolerance, target } // NEW
+      const target = p.targetNumber === '' || p.targetNumber === undefined ? undefined : Number(p.targetNumber)
+      settings = { tolerance, target }
     }
-    
 
     if (type === 'RANGE') {
       const min = p.min === '' || p.min === undefined ? undefined : Number(p.min)
@@ -389,18 +422,14 @@ targetNumber: formData.get('targetNumber'), // NEW
       settings = { caseSensitive, maxLength }
     }
 
-    // Lakukan update question dulu
     await prisma.question.update({
       where: { id: q.id },
       data: { ...updateBase, settings },
     })
 
-    // Kelola opsi:
     if (['SINGLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE'].includes(type)) {
       const labelsToKeep = optionsPayload.map(o => o.label)
-    
-      await prisma.$transaction(async (tx) => {
-        // Upsert tiap label (A/B/C/D atau A/B untuk True/False)
+      await prisma.$transaction(async (tx: Tx) => {
         for (const op of optionsPayload) {
           await tx.answerOption.upsert({
             where: { questionId_label: { questionId: q.id, label: op.label } },
@@ -408,35 +437,29 @@ targetNumber: formData.get('targetNumber'), // NEW
             create: { questionId: q.id, label: op.label, text: op.text, isCorrect: !!op.isCorrect },
           })
         }
-    
-        // Hapus opsi yang label-nya tidak dipakai lagi
         await tx.answerOption.deleteMany({
-          where: {
-            questionId: q.id,
-            label: { notIn: labelsToKeep },
-          },
+          where: { questionId: q.id, label: { notIn: labelsToKeep } },
         })
       })
     } else {
-      // Tipe tanpa opsi → hapus semua opsi lama
       await prisma.answerOption.deleteMany({ where: { questionId: q.id } })
-    }    
+    }
 
-    revalidatePath(`/admin/packages/${params.id}`)
+    revalidatePath(`/admin/packages/${id}`)
   }
 
   // ===== DELETE =====
   async function deleteQuestion(formData: FormData) {
     'use server'
-    const id = String(formData.get('id') ?? '')
-    if (!id) throw new Error('ID kosong')
-    await prisma.question.delete({ where: { id } })
-    revalidatePath(`/admin/packages/${params.id}`)
+    const qid = String(formData.get('id') ?? '')
+    if (!qid) throw new Error('ID kosong')
+    await prisma.question.delete({ where: { id: qid } })
+    revalidatePath(`/admin/packages/${id}`)
   }
 
   // ===== Fetch daftar soal =====
   const questions = await prisma.question.findMany({
-    where: { examPackageId: params.id },
+    where: { examPackageId: id },
     include: { options: true },
     orderBy: { order: 'asc' }
   }) as Array<{
@@ -451,34 +474,46 @@ targetNumber: formData.get('targetNumber'), // NEW
     options: Array<{ id: string; label: string; text: string; isCorrect: boolean }>
   }>
 
+  // UI helpers
+  const inputCls =
+    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30'
+  const fileCls =
+    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2.5 file:text-white'
+  const cardCls = 'rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200'
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+    <main className="min-h-screen bg-neutral-50">
+      <section className="mx-auto max-w-6xl space-y-8 px-6 py-8">
         {/* Header */}
+        <a
+            href="/admin/packages"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Kembali ke Daftar Paket
+          </a>
         <div>
-          <h1 className="text-3xl font-extrabold text-blue-700 tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
             Kelola Soal — {pkg.title}
           </h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="mt-1 text-sm text-gray-600">
             Tambah, edit, dan hapus soal untuk paket ini.
           </p>
         </div>
+        
 
         {/* CREATE */}
-        <form action={addQuestion} className="bg-white rounded-2xl shadow-lg border border-blue-100 p-5 grid gap-4" noValidate>
+        <form action={addQuestion} className={cardCls} noValidate>
           <h2 className="text-lg font-semibold text-gray-900">Tambah Soal</h2>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label htmlFor="order" className="block text-sm font-medium text-gray-800">Urutan (angka)</label>
-              <input id="order" name="order" placeholder="mis. 1"
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="order" className="mb-1 block text-sm font-medium text-gray-800">Urutan (angka)</label>
+              <input id="order" name="order" placeholder="mis. 1" className={inputCls} />
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="type" className="block text-sm font-medium text-gray-800">Tipe Soal</label>
-              <select id="type" name="type"
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5">
+            <div>
+              <label htmlFor="type" className="mb-1 block text-sm font-medium text-gray-800">Tipe Soal</label>
+              <select id="type" name="type" className={inputCls}>
                 <option value="SINGLE_CHOICE">Single Choice</option>
                 <option value="MULTI_SELECT">Multi Select</option>
                 <option value="TRUE_FALSE">True / False</option>
@@ -489,53 +524,50 @@ targetNumber: formData.get('targetNumber'), // NEW
               </select>
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="points" className="block text-sm font-medium text-gray-800">Poin</label>
-              <input id="points" name="points" type="number" min={0} step={1} defaultValue={1}
-                className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+            <div>
+              <label htmlFor="points" className="mb-1 block text-sm font-medium text-gray-800">Poin</label>
+              <input id="points" name="points" type="number" min={0} step={1} defaultValue={1} className={inputCls} />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-800">Wajib diisi?</label>
-              <input id="required" name="required" type="checkbox" className="mr-2" /> <label htmlFor="required">Required</label>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Wajib diisi?</label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                <input id="required" name="required" type="checkbox" /> Required
+              </label>
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <label htmlFor="image" className="block text-sm font-medium text-gray-800">Gambar (opsional)</label>
-              <input id="image" name="image" type="file" accept="image/*"
-                     className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white" />
+            <div className="sm:col-span-2">
+              <label htmlFor="image" className="mb-1 block text-sm font-medium text-gray-800">Gambar (opsional)</label>
+              <input id="image" name="image" type="file" accept="image/*" className={fileCls} />
             </div>
 
-            <div className="sm:col-span-2 space-y-1.5">
-              <label htmlFor="text" className="block text-sm font-medium text-gray-800">Teks soal</label>
-              <textarea id="text" name="text" placeholder="Tuliskan pertanyaan di sini…"
-                        className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" rows={3} />
+            <div className="sm:col-span-2">
+              <label htmlFor="text" className="mb-1 block text-sm font-medium text-gray-800">Teks soal</label>
+              <textarea id="text" name="text" placeholder="Tuliskan pertanyaan di sini…" rows={3} className={inputCls} />
             </div>
 
             {/* Bagian Opsi (A-D) */}
             <div className="sm:col-span-2">
-              <div className="grid sm:grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {(['A','B','C','D'] as const).map(L => (
-                  <div key={L} className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-800">Opsi {L}</label>
-                    <input name={L} placeholder={`Opsi ${L}`}
-                      className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                  <div key={L}>
+                    <label className="mb-1 block text-sm font-medium text-gray-800">Opsi {L}</label>
+                    <input name={L} placeholder={`Opsi ${L}`} className={inputCls} />
                   </div>
                 ))}
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-4">
+              <div className="mt-3 flex flex-wrap items-center gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-800">Jawaban benar (Single Choice)</label>
-                  <select name="correctLabel"
-                    className="w-40 rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5">
+                  <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Single Choice)</label>
+                  <select name="correctLabel" className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
                     <option value="">—</option>
                     <option value="A">A</option><option value="B">B</option>
                     <option value="C">C</option><option value="D">D</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-800">Jawaban benar (Multi Select)</label>
-                  <div className="flex gap-3">
+                  <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Multi Select)</label>
+                  <div className="flex gap-4 text-sm">
                     {(['A','B','C','D'] as const).map(L => (
                       <label key={`cm-${L}`} className="inline-flex items-center gap-2">
                         <input type="checkbox" name="correctMulti" value={L} /> {L}
@@ -547,20 +579,18 @@ targetNumber: formData.get('targetNumber'), // NEW
             </div>
 
             {/* True/False */}
-            <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Teks untuk TRUE</label>
-                <input name="tfTrueText" defaultValue="Benar"
-                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+            <div className="grid gap-3 sm:grid-cols-2 sm:col-span-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Teks untuk TRUE</label>
+                <input name="tfTrueText" defaultValue="Benar" className={inputCls} />
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Teks untuk FALSE</label>
-                <input name="tfFalseText" defaultValue="Salah"
-                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Teks untuk FALSE</label>
+                <input name="tfFalseText" defaultValue="Salah" className={inputCls} />
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Jawaban benar (True/False)</label>
-                <div className="flex gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (True/False)</label>
+                <div className="flex gap-6 text-sm">
                   <label className="inline-flex items-center gap-2"><input type="radio" name="correctTF" value="TRUE" /> TRUE</label>
                   <label className="inline-flex items-center gap-2"><input type="radio" name="correctTF" value="FALSE" /> FALSE</label>
                 </div>
@@ -568,48 +598,42 @@ targetNumber: formData.get('targetNumber'), // NEW
             </div>
 
             {/* Number/Range/ShortText settings */}
-            <div className="sm:col-span-2 grid sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Tolerance (Number)</label>
-                <input name="tolerance" type="number" step="any" placeholder="mis. 0.5"
-                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+            <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Tolerance (Number)</label>
+                <input name="tolerance" type="number" step="any" placeholder="mis. 0.5" className={inputCls} />
               </div>
-              <div className="space-y-1.5">
-    <label className="block text-sm font-medium text-gray-800">Target (Number)</label>
-    <input name="targetNumber" type="number" step="any" placeholder="mis. 42"
-      className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
-  </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Min (Range)</label>
-                <input name="min" type="number" step="any"
-                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Target (Number)</label>
+                <input name="targetNumber" type="number" step="any" placeholder="mis. 42" className={inputCls} />
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Max (Range)</label>
-                <input name="max" type="number" step="any"
-                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Min (Range)</label>
+                <input name="min" type="number" step="any" className={inputCls} />
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Step (Range)</label>
-                <input name="step" type="number" step="any" placeholder="opsional"
-                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Max (Range)</label>
+                <input name="max" type="number" step="any" className={inputCls} />
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Case sensitive (Short/Eessay)</label>
-                <label className="inline-flex items-center gap-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Step (Range)</label>
+                <input name="step" type="number" step="any" placeholder="opsional" className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Case sensitive (Short/Essay)</label>
+                <label className="inline-flex items-center gap-2 text-sm">
                   <input type="checkbox" name="caseSensitive" /> Aktifkan
                 </label>
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-800">Max length (Short/Essay)</label>
-                <input name="maxLength" type="number" step={1} min={1} placeholder="opsional"
-                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-800">Max length (Short/Essay)</label>
+                <input name="maxLength" type="number" step={1} min={1} placeholder="opsional" className={inputCls} />
               </div>
             </div>
           </div>
 
-          <div className="pt-2">
-            <button className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 shadow-md focus:outline-none focus:ring-4 focus:ring-blue-200">
+          <div className="pt-3">
+            <button className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
               Simpan Soal
             </button>
           </div>
@@ -623,41 +647,51 @@ targetNumber: formData.get('targetNumber'), // NEW
             {questions.map((q) => {
               const correctIds = new Set(q.options.filter(o => o.isCorrect).map(o => o.id))
               return (
-                <li key={q.id} className="bg-white rounded-2xl shadow-sm border border-blue-100 p-5 space-y-4">
+                <li key={q.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white font-bold">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 font-bold text-white">
                         {q.order}
                       </span>
                       <div className="font-semibold text-gray-900">Soal #{q.order}</div>
-                      <span className="ml-2 inline-flex items-center rounded-full bg-violet-50 text-violet-700 text-xs px-2 py-0.5 border border-violet-200">
-                      {q.type.replace(/_/g, ' ')}
+                      <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs text-violet-700">
+                        {q.type.replace(/_/g, ' ')}
                       </span>
-                      <span className="inline-flex items-center rounded-full bg-blue-50 text-blue-700 text-xs px-2 py-0.5 border border-blue-200">
+                      <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
                         {q.points} poin {q.required ? '• wajib' : ''}
                       </span>
                     </div>
                     <form>
                       <input type="hidden" name="id" value={q.id} />
-                      <button formAction={deleteQuestion} className="rounded-xl border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5">
+                      <button
+                        formAction={deleteQuestion}
+                        className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                      >
                         Hapus
                       </button>
                     </form>
                   </div>
 
-                  <div className="text-gray-800 leading-relaxed">{q.text}</div>
+                  <div className="mt-2 leading-relaxed text-gray-800">{q.text}</div>
 
                   {q.imageUrl && (
-                    <img src={q.imageUrl} alt="gambar soal" className="max-h-64 object-contain rounded-xl border border-gray-200" />
+                    <img
+                      src={q.imageUrl}
+                      alt="gambar soal"
+                      className="mt-3 max-h-64 rounded-xl border border-gray-200 object-contain"
+                    />
                   )}
 
-                  {/* Opsi (kalau ada) */}
                   {q.options.length > 0 && (
-                    <ul className="grid md:grid-cols-2 gap-2 text-sm">
+                    <ul className="mt-3 grid gap-2 text-sm md:grid-cols-2">
                       {q.options.map((o) => (
                         <li
                           key={o.id}
-                          className={`rounded-lg border px-3 py-2 ${correctIds.has(o.id) ? 'border-green-300 bg-green-50 font-semibold' : 'border-gray-200 bg-gray-50'}`}
+                          className={`rounded-lg border px-3 py-2 ${
+                            correctIds.has(o.id)
+                              ? 'border-green-300 bg-green-50 font-semibold'
+                              : 'border-gray-200 bg-gray-50'
+                          }`}
                         >
                           {o.label}. {o.text}
                         </li>
@@ -665,33 +699,30 @@ targetNumber: formData.get('targetNumber'), // NEW
                     </ul>
                   )}
 
-                  {/* Ringkasan settings */}
                   {q.settings && (
-                    <div className="text-xs text-gray-600 mt-1">
-                      <code className="bg-gray-100 px-2 py-1 rounded">{JSON.stringify(q.settings)}</code>
+                    <div className="mt-2 text-xs text-gray-600">
+                      <code className="rounded bg-gray-100 px-2 py-1">{JSON.stringify(q.settings)}</code>
                     </div>
                   )}
 
                   {/* EDIT */}
-                  <details className="mt-2 group">
-                    <summary className="cursor-pointer select-none inline-flex items-center gap-2 text-sm font-medium text-blue-700">
-                      ✏️ Edit soal ini
+                  <details className="group mt-3">
+                    <summary className="inline-flex cursor-pointer select-none items-center gap-2 text-sm font-medium text-blue-700">
+                      Edit soal ini
                     </summary>
 
-                    <form action={updateQuestion} className="grid gap-3 mt-3 bg-gray-50 rounded-xl p-4 border border-gray-200" noValidate>
+                    <form action={updateQuestion} className="mt-3 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4" noValidate>
                       <input type="hidden" name="id" value={q.id} />
 
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <label className="block text-sm font-medium text-gray-800">Urutan</label>
-                          <input name="order" defaultValue={q.order}
-                                 className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-800">Urutan</label>
+                          <input name="order" defaultValue={q.order} className={inputCls} />
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label className="block text-sm font-medium text-gray-800">Tipe Soal</label>
-                          <select name="type" defaultValue={q.type}
-                                  className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5">
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-800">Tipe Soal</label>
+                          <select name="type" defaultValue={q.type} className={inputCls}>
                             <option value="SINGLE_CHOICE">Single Choice</option>
                             <option value="MULTI_SELECT">Multi Select</option>
                             <option value="TRUE_FALSE">True / False</option>
@@ -702,57 +733,59 @@ targetNumber: formData.get('targetNumber'), // NEW
                           </select>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label className="block text-sm font-medium text-gray-800">Poin</label>
-                          <input name="points" type="number" min={0} step={1} defaultValue={q.points}
-                                 className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-800">Poin</label>
+                          <input name="points" type="number" min={0} step={1} defaultValue={q.points} className={inputCls} />
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label className="block text-sm font-medium text-gray-800">Wajib diisi?</label>
-                          <label className="inline-flex items-center gap-2">
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-800">Wajib diisi?</label>
+                          <label className="inline-flex items-center gap-2 text-sm">
                             <input type="checkbox" name="required" defaultChecked={q.required} /> Required
                           </label>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label className="block text-sm font-medium text-gray-800">Gambar (opsional)</label>
-                          <input name="image" type="file" accept="image/*"
-                                 className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white" />
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-800">Gambar (opsional)</label>
+                          <input name="image" type="file" accept="image/*" className={fileCls} />
                         </div>
 
-                        <div className="sm:col-span-2 space-y-1.5">
-                          <label className="block text-sm font-medium text-gray-800">Teks soal</label>
-                          <textarea name="text" defaultValue={q.text}
-                                    className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" rows={3} />
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-sm font-medium text-gray-800">Teks soal</label>
+                          <textarea name="text" defaultValue={q.text} rows={3} className={inputCls} />
                         </div>
 
                         {/* Opsi A-D */}
-                        <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
+                        <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
                           {(['A','B','C','D'] as const).map(L => (
-                            <div key={`edit-${q.id}-${L}`} className="space-y-1.5">
-                              <label className="block text-sm font-medium text-gray-800">Opsi {L}</label>
-                              <input name={L} defaultValue={q.options.find((o) => o.label === L)?.text ?? ''}
-                                     className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                            <div key={`edit-${q.id}-${L}`}>
+                              <label className="mb-1 block text-sm font-medium text-gray-800">Opsi {L}</label>
+                              <input
+                                name={L}
+                                defaultValue={q.options.find((o) => o.label === L)?.text ?? ''}
+                                className={inputCls}
+                              />
                             </div>
                           ))}
                         </div>
 
                         {/* Correct single & multi */}
-                        <div className="space-y-1.5">
-                          <label className="block text-sm font-medium text-gray-800">Jawaban benar (Single Choice)</label>
-                          <select name="correctLabel"
-                                  defaultValue={q.options.find(o => o.isCorrect)?.label ?? ''}
-                                  className="w-40 rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5">
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Single Choice)</label>
+                          <select
+                            name="correctLabel"
+                            defaultValue={q.options.find(o => o.isCorrect)?.label ?? ''}
+                            className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          >
                             <option value="">—</option>
                             <option value="A">A</option><option value="B">B</option>
                             <option value="C">C</option><option value="D">D</option>
                           </select>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label className="block text-sm font-medium text-gray-800">Jawaban benar (Multi Select)</label>
-                          <div className="flex gap-3">
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Multi Select)</label>
+                          <div className="flex gap-4 text-sm">
                             {(['A','B','C','D'] as const).map(L => {
                               const isC = q.options.find(o => o.label === L)?.isCorrect ?? false
                               return (
@@ -765,81 +798,83 @@ targetNumber: formData.get('targetNumber'), // NEW
                         </div>
 
                         {/* True/False */}
-                        <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Teks TRUE</label>
-                            <input name="tfTrueText" defaultValue={q.options.find(o=>o.label==='A')?.text ?? 'Benar'}
-                                   className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                        <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Teks TRUE</label>
+                            <input
+                              name="tfTrueText"
+                              defaultValue={q.options.find(o=>o.label==='A')?.text ?? 'Benar'}
+                              className={inputCls}
+                            />
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Teks FALSE</label>
-                            <input name="tfFalseText" defaultValue={q.options.find(o=>o.label==='B')?.text ?? 'Salah'}
-                                   className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Teks FALSE</label>
+                            <input
+                              name="tfFalseText"
+                              defaultValue={q.options.find(o=>o.label==='B')?.text ?? 'Salah'}
+                              className={inputCls}
+                            />
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Jawaban benar (True/False)</label>
-                            <div className="flex gap-4">
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (True/False)</label>
+                            <div className="flex gap-6 text-sm">
                               <label className="inline-flex items-center gap-2">
-                                <input type="radio" name="correctTF" value="TRUE"
-                                  defaultChecked={q.options.find(o=>o.label==='A')?.isCorrect === true} /> TRUE
+                                <input
+                                  type="radio"
+                                  name="correctTF"
+                                  value="TRUE"
+                                  defaultChecked={q.options.find(o=>o.label==='A')?.isCorrect === true}
+                                /> TRUE
                               </label>
                               <label className="inline-flex items-center gap-2">
-                                <input type="radio" name="correctTF" value="FALSE"
-                                  defaultChecked={q.options.find(o=>o.label==='B')?.isCorrect === true} /> FALSE
+                                <input
+                                  type="radio"
+                                  name="correctTF"
+                                  value="FALSE"
+                                  defaultChecked={q.options.find(o=>o.label==='B')?.isCorrect === true}
+                                /> FALSE
                               </label>
                             </div>
                           </div>
                         </div>
 
-                        {/* Number/Range/Short/Eessay settings */}
-                        <div className="sm:col-span-2 grid sm:grid-cols-3 gap-3">
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Tolerance (Number)</label>
-                            <input name="tolerance" type="number" step="any"
-                                   defaultValue={q.settings?.tolerance ?? ''}
-                                   className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                        {/* Number/Range/Short/Essay settings */}
+                        <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Tolerance (Number)</label>
+                            <input name="tolerance" type="number" step="any" defaultValue={q.settings?.tolerance ?? ''} className={inputCls} />
                           </div>
-                          <div className="space-y-1.5">
-    <label className="block text-sm font-medium text-gray-800">Target (Number)</label>
-    <input name="targetNumber" type="number" step="any"
-      defaultValue={q.settings?.target ?? ''}
-      className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
-  </div>
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Min (Range)</label>
-                            <input name="min" type="number" step="any"
-                                   defaultValue={q.settings?.min ?? ''}
-                                   className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Target (Number)</label>
+                            <input name="targetNumber" type="number" step="any" defaultValue={q.settings?.target ?? ''} className={inputCls} />
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Max (Range)</label>
-                            <input name="max" type="number" step="any"
-                                   defaultValue={q.settings?.max ?? ''}
-                                   className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Min (Range)</label>
+                            <input name="min" type="number" step="any" defaultValue={q.settings?.min ?? ''} className={inputCls} />
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Step (Range)</label>
-                            <input name="step" type="number" step="any"
-                                   defaultValue={q.settings?.step ?? ''}
-                                   className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Max (Range)</label>
+                            <input name="max" type="number" step="any" defaultValue={q.settings?.max ?? ''} className={inputCls} />
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Case sensitive (Short/Essay)</label>
-                            <label className="inline-flex items-center gap-2">
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Step (Range)</label>
+                            <input name="step" type="number" step="any" defaultValue={q.settings?.step ?? ''} className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Case sensitive (Short/Essay)</label>
+                            <label className="inline-flex items-center gap-2 text-sm">
                               <input type="checkbox" name="caseSensitive" defaultChecked={q.settings?.caseSensitive === true} /> Aktifkan
                             </label>
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-gray-800">Max length (Short/Essay)</label>
-                            <input name="maxLength" type="number" step={1} min={1}
-                                   defaultValue={q.settings?.maxLength ?? ''}
-                                   className="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 p-2.5" />
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-800">Max length (Short/Essay)</label>
+                            <input name="maxLength" type="number" step={1} min={1} defaultValue={q.settings?.maxLength ?? ''} className={inputCls} />
                           </div>
                         </div>
                       </div>
 
                       <div className="pt-1">
-                        <button className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 shadow-md focus:outline-none focus:ring-4 focus:ring-blue-200">
+                        <button className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                           Simpan Perubahan
                         </button>
                       </div>
@@ -850,7 +885,20 @@ targetNumber: formData.get('targetNumber'), // NEW
             })}
           </ol>
         </div>
-      </div>
-    </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="mt-12 border-t bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-6 text-center md:flex-row md:text-left">
+          <p className="text-xs text-gray-500">
+            © {new Date().getFullYear()} Simulasi Ujian — Platform simulasi ujian untuk siswa.
+          </p>
+          <p className="text-xs text-gray-500">
+            Dibuat oleh <span className="font-medium text-gray-700">fahmibastari</span> &{' '}
+            <span className="font-medium text-gray-700">qorrieaina</span>.
+          </p>
+        </div>
+      </footer>
+    </main>
   )
 }

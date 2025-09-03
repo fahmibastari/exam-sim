@@ -77,6 +77,7 @@ model AnswerOption {
   Question   Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([questionId, label])
+  @@index([questionId, isCorrect])   // ⬅️ sering dipakai untuk auto-grade
 }
 
 model Attempt {
@@ -100,7 +101,7 @@ model Attempt {
 
   @@unique([userId, examPackageId])
   @@unique([examPackageId, participantEmail])
-  @@index([examPackageId])
+  @@index([examPackageId, startedAt]) // ⬅️ listing cepat di results
 }
 
 model AttemptAnswer {
@@ -123,5 +124,6 @@ model AttemptAnswer {
 
   @@unique([attemptId, questionId])
   @@index([questionId])
+  @@index([attemptId])               // ⬅️ akses jawaban per attempt
 }
 
