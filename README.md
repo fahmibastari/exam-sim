@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📘 Exam-Sim — Simulasi Ujian Online
 
-## Getting Started
+![Next.js](https://img.shields.io/badge/Next.js-15-black) 
+![Prisma](https://img.shields.io/badge/Prisma-6-blue) 
+![Supabase](https://img.shields.io/badge/Supabase-Storage%20%26%20Auth-green) 
+![License](https://img.shields.io/badge/license-MIT-brightgreen)
 
-First, run the development server:
+## 🚀 Deskripsi
+**Exam-Sim** adalah platform simulasi ujian berbasis web yang dirancang untuk membantu siswa berlatih menghadapi ujian dan mempermudah admin dalam mengelola soal serta memantau hasil.  
+Dibangun menggunakan **Next.js 15, Prisma, NeonDB, Supabase, dan NextAuth** dengan desain modern berbasis **TailwindCSS + Shadcn UI**.
 
+---
+
+## ✨ Fitur Utama
+- 🔑 **Autentikasi & Role**
+  - Login/Register dengan **NextAuth**
+  - Role `ADMIN` & `USER` dengan middleware proteksi
+
+- 📝 **Manajemen Paket Ujian**
+  - Admin bisa membuat, mengedit, menghapus paket ujian
+  - Dukungan tipe soal: Single Choice, Multi Select, True/False, Short Text, Essay, Number, Range  
+
+- 📂 **Bank Soal & Gambar**
+  - Upload gambar soal via **Supabase Bucket**
+  - Opsi jawaban dengan penanda jawaban benar
+
+- 🕒 **Sesi Ujian**
+  - User masuk dengan **token akses**
+  - Timer otomatis sesuai batas waktu
+  - Navigasi soal interaktif
+
+- 📊 **Hasil & Penilaian**
+  - Skoring otomatis untuk soal objektif
+  - Rekap hasil per attempt
+  - Dashboard admin untuk memantau peserta
+
+---
+
+## 🛠️ Tech Stack
+- **Framework:** Next.js 15 (App Router, Turbopack, TypeScript)  
+- **Database:** NeonDB (PostgreSQL serverless)  
+- **ORM:** Prisma 6  
+- **Auth:** NextAuth.js (JWT + Middleware proteksi role)  
+- **Storage:** Supabase Bucket (gambar soal)  
+- **Styling:** TailwindCSS + Shadcn UI  
+- **Validation:** Zod  
+
+---
+
+## 📂 Struktur Folder
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+src/
+ ├── app/
+ │   ├── admin/        # Halaman admin (paket ujian, hasil)
+ │   ├── api/          # Endpoint Next.js API
+ │   ├── exam/         # Halaman ujian untuk user
+ │   └── login/        # Autentikasi
+ ├── lib/              # Config (authOptions, prisma, supabase)
+ ├── components/       # UI Components
+ └── prisma/           # Schema & migrations
