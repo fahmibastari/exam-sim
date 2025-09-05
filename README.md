@@ -1,4 +1,4 @@
-# 📘 Exam-Sim — Simulasi Ujian Online
+# 📘 ExamLent — Simulasi Ujian Online
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-black) 
 ![Prisma](https://img.shields.io/badge/Prisma-6-blue) 
@@ -6,7 +6,7 @@
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 
 ## 🚀 Deskripsi
-**Exam-Sim** adalah platform simulasi ujian berbasis web yang dirancang untuk membantu siswa berlatih menghadapi ujian dan mempermudah admin dalam mengelola soal serta memantau hasil.  
+**ExamLent** adalah platform simulasi ujian berbasis web yang dirancang untuk membantu siswa berlatih menghadapi ujian dan mempermudah admin dalam mengelola soal serta memantau hasil.  
 Dibangun menggunakan **Next.js 15, Prisma, NeonDB, Supabase, dan NextAuth** dengan desain modern berbasis **TailwindCSS + Shadcn UI**.
 
 ---
