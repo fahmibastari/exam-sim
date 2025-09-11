@@ -15,14 +15,28 @@ const BoolFromCheckbox = z.preprocess(
   z.boolean()
 )
 
+// ====== preprocess agar null -> '' untuk field opsional ======
+const toEmpty = (v: unknown) => (v === null || v === undefined ? '' : v)
+
+const OptionalNonEmpty = z.preprocess(
+  toEmpty,
+  z.union([z.literal(''), z.string().min(1)])
+)
+
+const IdOrEmpty = z.preprocess(
+  toEmpty,
+  z.union([z.literal(''), z.string().min(1)]) // cuid, jadi cukup non-empty string
+)
+
+const EnumOrEmpty = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(toEmpty, z.union([z.literal(''), z.enum(values as any)]))
+
+const NumOrEmpty = z.preprocess(toEmpty, z.union([z.literal(''), z.coerce.number()]))
+const NumMin0OrEmpty = z.preprocess(toEmpty, z.union([z.literal(''), z.coerce.number().min(0)]))
+const IntPosOrEmpty = z.preprocess(toEmpty, z.union([z.literal(''), z.coerce.number().int().positive()]))
+
 const QuestionTypeEnum = z.enum([
-  'SINGLE_CHOICE',
-  'MULTI_SELECT',
-  'TRUE_FALSE',
-  'SHORT_TEXT',
-  'ESSAY',
-  'NUMBER',
-  'RANGE',
+  'SINGLE_CHOICE','MULTI_SELECT','TRUE_FALSE','SHORT_TEXT','ESSAY','NUMBER','RANGE',
 ])
 
 const BaseQSchema = z.object({
@@ -32,34 +46,8 @@ const BaseQSchema = z.object({
   type: QuestionTypeEnum,
   points: z.coerce.number().int().min(0).default(1),
   required: BoolFromCheckbox.default(false),
+  contextText: OptionalNonEmpty.optional(), // ✅ sekarang aman
 })
-
-// ====== preprocess agar null -> '' untuk field opsional ======
-const toEmpty = (v: unknown) => (v === null || v === undefined ? '' : v)
-
-// string opsional tapi kalau ada harus non-empty
-const OptionalNonEmpty = z.preprocess(
-  toEmpty,
-  z.union([z.literal(''), z.string().min(1)])
-)
-
-// enum atau empty string
-const EnumOrEmpty = <T extends readonly [string, ...string[]]>(values: T) =>
-  z.preprocess(toEmpty, z.union([z.literal(''), z.enum(values as any)]))
-
-// number helpers (menerima '' juga)
-const NumOrEmpty = z.preprocess(
-  toEmpty,
-  z.union([z.literal(''), z.coerce.number()])
-)
-const NumMin0OrEmpty = z.preprocess(
-  toEmpty,
-  z.union([z.literal(''), z.coerce.number().min(0)])
-)
-const IntPosOrEmpty = z.preprocess(
-  toEmpty,
-  z.union([z.literal(''), z.coerce.number().int().positive()])
-)
 
 // Tambahan field opsional per tipe
 const OptionsSchema = z.object({
@@ -67,7 +55,8 @@ const OptionsSchema = z.object({
   B: OptionalNonEmpty.optional(),
   C: OptionalNonEmpty.optional(),
   D: OptionalNonEmpty.optional(),
-  correctLabel: EnumOrEmpty(['A', 'B', 'C', 'D'] as const).optional(),
+  E: OptionalNonEmpty.optional(),
+  correctLabel: EnumOrEmpty(['A', 'B', 'C', 'D', 'E'] as const).optional(),
 })
 
 const TrueFalseSchema = z.object({
@@ -96,13 +85,17 @@ const ShortTextSchema = z.object({
 })
 
 const CreateSchema = BaseQSchema
-  .and(OptionsSchema)
-  .and(TrueFalseSchema)
-  .and(NumberSchema)
-  .and(RangeSchema)
-  .and(ShortTextSchema)
+  .merge(OptionsSchema)
+  .merge(TrueFalseSchema)
+  .merge(NumberSchema)
+  .merge(RangeSchema)
+  .merge(ShortTextSchema)
+  .extend({
+    passageId: IdOrEmpty.optional(),
+  })
 
-const EditSchema = CreateSchema.and(z.object({ id: z.string().min(1) }))
+// EditSchema juga sekalian rapihin:
+const EditSchema = CreateSchema.extend({ id: z.string().min(1) })
 
 // tipe opsi, biar rapi
 // ganti yang lama:
@@ -150,7 +143,7 @@ export default async function EditPackagePage(
   // ===== CREATE =====
   async function addQuestion(formData: FormData) {
     'use server'
-    const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A'|'B'|'C'|'D'>
+    const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A'|'B'|'C'|'D'|'E'>
 
     const raw = {
       order: formData.get('order'),
@@ -159,12 +152,15 @@ export default async function EditPackagePage(
       type: formData.get('type'),
       points: formData.get('points'),
       required: formData.get('required'),
+      contextText: formData.get('contextText'),
+      passageId: formData.get('passageId'),
 
       // opsi
       A: formData.get('A'),
       B: formData.get('B'),
       C: formData.get('C'),
       D: formData.get('D'),
+      E: formData.get('E'),
       correctLabel: formData.get('correctLabel'),
 
       // true/false
@@ -192,6 +188,26 @@ export default async function EditPackagePage(
     const p = parsed.data
     const imageUrl = await uploadImage(id, parsed.data.image as File | null)
 
+    const last = await prisma.question.findFirst({
+      where: { examPackageId: id },
+      orderBy: { order: 'desc' },
+      select: { order: true },
+    })
+    
+    let safeOrder = Number(p.order)
+    if (!Number.isFinite(safeOrder) || safeOrder <= 0) {
+      safeOrder = (last?.order ?? 0) + 1
+    } else {
+      const exists = await prisma.question.findFirst({
+        where: { examPackageId: id, order: safeOrder },
+        select: { id: true },
+      })
+      if (exists) {
+        // kalau bentrok, dorong ke paling akhir
+        safeOrder = (last?.order ?? 0) + 1
+      }
+    }
+
     type Opt = { label: string; text: string; isCorrect?: boolean }
 
     const type = p.type
@@ -199,38 +215,61 @@ export default async function EditPackagePage(
     let settings: Record<string, any> | undefined = undefined
 
     if (type === 'SINGLE_CHOICE') {
-      const labels: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
-      for (const L of labels) {
+      const labels4: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
+      for (const L of labels4) {
         const text = (p as any)[L]
         if (!text || String(text).trim() === '') {
           throw new Error(`Opsi ${L} wajib diisi untuk tipe Single Choice`)
         }
       }
       if (!p.correctLabel) throw new Error('Pilih jawaban benar (Single Choice)')
+    
+      // validasi jika correctLabel = 'E', pastikan E terisi
+      if (p.correctLabel === 'E') {
+        if (!p.E || String(p.E).trim() === '') {
+          throw new Error('Opsi E dipilih sebagai jawaban benar, tetapi kosong')
+        }
+      }
+    
       options = [
         { label: 'A', text: String(p.A), isCorrect: p.correctLabel === 'A' },
         { label: 'B', text: String(p.B), isCorrect: p.correctLabel === 'B' },
         { label: 'C', text: String(p.C), isCorrect: p.correctLabel === 'C' },
         { label: 'D', text: String(p.D), isCorrect: p.correctLabel === 'D' },
       ]
+      // Opsi E opsional: hanya dibuat jika diisi
+      if (p.E && String(p.E).trim() !== '') {
+        options.push({ label: 'E', text: String(p.E), isCorrect: p.correctLabel === 'E' })
+      }
     }
+    
 
     if (type === 'MULTI_SELECT') {
-      const labels: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
-      for (const L of labels) {
+      const labels4: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
+      for (const L of labels4) {
         const text = (p as any)[L]
         if (!text || String(text).trim() === '') {
           throw new Error(`Opsi ${L} wajib diisi untuk tipe Multi Select`)
         }
       }
       if (correctMulti.length === 0) throw new Error('Pilih minimal satu jawaban benar (Multi Select)')
+    
+      // jika E dicentang sebagai benar, pastikan E terisi
+      if (correctMulti.includes('E') && (!p.E || String(p.E).trim() === '')) {
+        throw new Error('Opsi E ditandai benar, tetapi kosong')
+      }
+    
       options = [
         { label: 'A', text: String(p.A), isCorrect: correctMulti.includes('A') },
         { label: 'B', text: String(p.B), isCorrect: correctMulti.includes('B') },
         { label: 'C', text: String(p.C), isCorrect: correctMulti.includes('C') },
         { label: 'D', text: String(p.D), isCorrect: correctMulti.includes('D') },
       ]
+      if (p.E && String(p.E).trim() !== '') {
+        options.push({ label: 'E', text: String(p.E), isCorrect: correctMulti.includes('E') })
+      }
     }
+    
 
     if (type === 'TRUE_FALSE') {
       const tTrue = (p.tfTrueText ?? 'Benar').toString()
@@ -272,10 +311,12 @@ export default async function EditPackagePage(
     await prisma.question.create({
       data: {
         examPackageId: id,
-        order: p.order,
+        order: safeOrder,
         text: p.text,
         imageUrl,
         type,
+        contextText: p.contextText ? String(p.contextText) : undefined,
+        passageId: p.passageId ? String(p.passageId) : undefined,
         points: p.points ?? 1,
         required: p.required ?? false,
         settings: settings ?? undefined,
@@ -291,7 +332,7 @@ export default async function EditPackagePage(
   // ===== UPDATE =====
   async function updateQuestion(formData: FormData) {
     'use server'
-    const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A'|'B'|'C'|'D'>
+    const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A'|'B'|'C'|'D'|'E'>
 
     const raw = {
       id: formData.get('id'),
@@ -301,11 +342,15 @@ export default async function EditPackagePage(
       type: formData.get('type'),
       points: formData.get('points'),
       required: formData.get('required'),
+      contextText: formData.get('contextText'),
+      passageId: formData.get('passageId'),
+
 
       A: formData.get('A'),
       B: formData.get('B'),
       C: formData.get('C'),
       D: formData.get('D'),
+      E: formData.get('E'),
       correctLabel: formData.get('correctLabel'),
 
       tfTrueText: formData.get('tfTrueText'),
@@ -335,6 +380,24 @@ export default async function EditPackagePage(
     })
     if (!q) throw new Error('Soal tidak ditemukan')
 
+      let safeOrder = Number(p.order)
+      if (!Number.isFinite(safeOrder) || safeOrder <= 0) {
+        safeOrder = q.order // kalau invalid, pertahankan yg lama
+      } else if (safeOrder !== q.order) {
+        const conflict = await prisma.question.findFirst({
+          where: { examPackageId: id, order: safeOrder, NOT: { id: q.id } },
+          select: { id: true },
+        })
+        if (conflict) {
+          const last = await prisma.question.findFirst({
+            where: { examPackageId: id },
+            orderBy: { order: 'desc' },
+            select: { order: true },
+          })
+          safeOrder = (last?.order ?? 0) + 1
+        }
+      }
+
     let imageUrl = q.imageUrl ?? undefined
     if (p.image && (p.image as any).size > 0) {
       imageUrl = await uploadImage(id, p.image as File)
@@ -345,50 +408,77 @@ export default async function EditPackagePage(
     const type = p.type
 
     const updateBase = {
-      order: p.order,
+      order: safeOrder,
       text: p.text,
       imageUrl,
       type,
       points: p.points ?? 1,
       required: p.required ?? false,
+      contextText: p.contextText ? String(p.contextText) : null,
+      passageId: p.passageId ? String(p.passageId) : null, // kosongkan = lepas dari passage
     }
 
     if (type === 'SINGLE_CHOICE') {
-      const labels: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
-      for (const L of labels) {
+      const labels4: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
+      for (const L of labels4) {
         const text = (p as any)[L]
         if (!text || String(text).trim() === '') throw new Error(`Opsi ${L} wajib diisi`)
       }
       if (!p.correctLabel) throw new Error('Pilih jawaban benar')
-      const byLabel: Record<'A'|'B'|'C'|'D', string|undefined> = { A: undefined, B: undefined, C: undefined, D: undefined }
+    
+      // map id existing by label termasuk E
+      const byLabel: Record<'A'|'B'|'C'|'D'|'E', string|undefined> = { A: undefined, B: undefined, C: undefined, D: undefined, E: undefined }
       q.options.forEach((o: OptionRow) => {
-        if (['A','B','C','D'].includes(o.label)) (byLabel as any)[o.label] = o.id
+        if (['A','B','C','D','E'].includes(o.label)) (byLabel as any)[o.label] = o.id
       })
+    
+      // validasi correctLabel === 'E' ⇒ E wajib terisi
+      if (p.correctLabel === 'E' && (!p.E || String(p.E).trim() === '')) {
+        throw new Error('Opsi E dipilih sebagai jawaban benar, tetapi kosong')
+      }
+    
       optionsPayload = [
         { id: byLabel.A, label: 'A', text: String(p.A), isCorrect: p.correctLabel === 'A' },
         { id: byLabel.B, label: 'B', text: String(p.B), isCorrect: p.correctLabel === 'B' },
         { id: byLabel.C, label: 'C', text: String(p.C), isCorrect: p.correctLabel === 'C' },
         { id: byLabel.D, label: 'D', text: String(p.D), isCorrect: p.correctLabel === 'D' },
       ]
+      if (p.E && String(p.E).trim() !== '') {
+        optionsPayload.push({ id: byLabel.E, label: 'E', text: String(p.E), isCorrect: p.correctLabel === 'E' })
+      }
     }
+    
+    
 
     if (type === 'MULTI_SELECT') {
-      const labels: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
-      for (const L of labels) {
+      const labels4: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
+      for (const L of labels4) {
         const text = (p as any)[L]
         if (!text || String(text).trim() === '') throw new Error(`Opsi ${L} wajib diisi`)
       }
-      const byLabel: Record<'A'|'B'|'C'|'D', string|undefined> = { A: undefined, B: undefined, C: undefined, D: undefined }
+    
+      const byLabel: Record<'A'|'B'|'C'|'D'|'E', string|undefined> = { A: undefined, B: undefined, C: undefined, D: undefined, E: undefined }
       q.options.forEach((o: OptionRow) => {
-        if (['A','B','C','D'].includes(o.label)) (byLabel as any)[o.label] = o.id
+        if (['A','B','C','D','E'].includes(o.label)) (byLabel as any)[o.label] = o.id
       })
+    
+      if (correctMulti.length === 0) throw new Error('Pilih minimal satu jawaban benar')
+      if (correctMulti.includes('E') && (!p.E || String(p.E).trim() === '')) {
+        throw new Error('Opsi E ditandai benar, tetapi kosong')
+      }
+    
       optionsPayload = [
         { id: byLabel.A, label: 'A', text: String(p.A), isCorrect: correctMulti.includes('A') },
         { id: byLabel.B, label: 'B', text: String(p.B), isCorrect: correctMulti.includes('B') },
         { id: byLabel.C, label: 'C', text: String(p.C), isCorrect: correctMulti.includes('C') },
         { id: byLabel.D, label: 'D', text: String(p.D), isCorrect: correctMulti.includes('D') },
       ]
+      if (p.E && String(p.E).trim() !== '') {
+        optionsPayload.push({ id: byLabel.E, label: 'E', text: String(p.E), isCorrect: correctMulti.includes('E') })
+      }
     }
+    
+    
 
     if (type === 'TRUE_FALSE') {
       const tTrue = (p.tfTrueText ?? 'Benar').toString()
@@ -457,11 +547,51 @@ export default async function EditPackagePage(
     await prisma.question.delete({ where: { id: qid } })
     revalidatePath(`/admin/packages/${id}`)
   }
+  
+  // ===== PASSAGE: CREATE =====
+async function createPassage(formData: FormData) {
+  'use server'
+  const title = String(formData.get('title') ?? '').trim() || null
+  const content = String(formData.get('content') ?? '').trim()
+  if (!content || content.length < 10) throw new Error('Isi passage minimal 10 karakter')
+  await prisma.passage.create({
+    data: { examPackageId: id, title, content },
+  })
+  revalidatePath(`/admin/packages/${id}`)
+}
+
+// ===== PASSAGE: UPDATE =====
+async function updatePassage(formData: FormData) {
+  'use server'
+  const pid = String(formData.get('id') ?? '')
+  if (!pid) throw new Error('ID passage kosong')
+  const title = String(formData.get('title') ?? '').trim() || null
+  const content = String(formData.get('content') ?? '').trim()
+  if (!content || content.length < 10) throw new Error('Isi passage minimal 10 karakter')
+  await prisma.passage.update({
+    where: { id: pid },
+    data: { title, content },
+  })
+  revalidatePath(`/admin/packages/${id}`)
+}
+
+  async function deletePassage(formData: FormData) {
+    'use server'
+    const pid = String(formData.get('id') ?? '')
+    if (!pid) throw new Error('ID passage kosong')
+    await prisma.passage.delete({ where: { id: pid } }) // Question.passageId -> null (onDelete: SetNull)
+    revalidatePath(`/admin/packages/${id}`)
+  }
 
   // ===== Fetch daftar soal =====
+  const passages = await prisma.passage.findMany({
+    where: { examPackageId: id },
+    orderBy: { createdAt: 'asc' },
+  })
+  
   const questions = await prisma.question.findMany({
     where: { examPackageId: id },
-    include: { options: true },
+    include: { options: true, passage: { select: { id: true, title: true } } }, // NEW
     orderBy: { order: 'asc' }
   }) as Array<{
     id: string
@@ -472,8 +602,12 @@ export default async function EditPackagePage(
     points: number
     required: boolean
     settings: any | null
+    contextText: string | null
+    passage: { id: string; title: string | null } | null // NEW
     options: Array<{ id: string; label: string; text: string; isCorrect: boolean }>
   }>
+  
+  
 
   // UI helpers
   const inputCls =
@@ -500,8 +634,74 @@ export default async function EditPackagePage(
             Tambah, edit, dan hapus soal untuk paket ini.
           </p>
         </div>
-        
 
+        <a
+    href={`/admin/packages/${id}/results`}
+    className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+  >
+    Lihat Hasil
+  </a>
+        
+{/* === PASSAGE SECTION (Pindah ke sini, sebelum ADD QUESTION) === */}
+<section className={cardCls}>
+  <h2 className="text-lg font-semibold text-gray-900">Reading (Passage)</h2>
+  <p className="mt-1 text-sm text-gray-600">
+    Buat passage/story panjang, lalu tautkan ke beberapa soal.
+  </p>
+
+  <details className="group mt-3">
+    <summary className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 group-open:bg-emerald-600 group-open:text-white group-open:border-emerald-600 cursor-pointer">
+      <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      <span className="group-open:hidden">Tambah Passage</span>
+      <span className="hidden group-open:inline">Tutup</span>
+    </summary>
+
+    <form action={createPassage} className="mt-3 grid gap-3">
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-800">Judul (opsional)</label>
+        <input name="title" placeholder="mis. Reading 1" className={inputCls} />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-800">Isi Passage</label>
+        <textarea name="content" rows={6} placeholder="Tempel cerita/artikel di sini…" className={inputCls} />
+        <p className="mt-1 text-xs text-gray-500">Markdown/plain text; minimal 10 karakter.</p>
+      </div>
+      <div>
+        <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+          Simpan Passage
+        </button>
+      </div>
+    </form>
+  </details>
+
+  <div className="mt-5 divide-y rounded-xl border">
+    {passages.length === 0 && (
+      <div className="p-4 text-sm text-gray-500">Belum ada passage.</div>
+    )}
+    {passages.map(p => (
+      <div key={p.id} className="grid gap-3 p-4 md:grid-cols-12 md:items-start">
+        <div className="md:col-span-8">
+          <div className="font-medium text-gray-900">{p.title ?? '(Tanpa judul)'}</div>
+          <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-gray-700">{(p as any).content}</div>
+        </div>
+        <div className="md:col-span-4 md:text-right">
+          <form action={updatePassage} className="mb-2 space-y-2">
+            <input type="hidden" name="id" value={p.id} />
+            <input name="title" defaultValue={p.title ?? ''} className={inputCls} placeholder="Judul (opsional)" />
+            <textarea name="content" defaultValue={(p as any).content ?? ''} rows={3} className={inputCls} />
+            <button className="rounded-lg border px-3 py-1.5 text-sm">Update</button>
+          </form>
+          <form action={deletePassage}>
+            <input type="hidden" name="id" value={p.id} />
+            <button className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">
+              Hapus
+            </button>
+          </form>
+        </div>
+      </div>
+    ))}
+  </div>
+</section>
         {/* CREATE (collapsed by default) */}
 <details className="group mt-2 add-q">
   {/* Tombol buka/tutup */}
@@ -538,7 +738,7 @@ export default async function EditPackagePage(
           <option value="SHORT_TEXT">Short Text</option>
           <option value="ESSAY">Essay</option>
         </select>
-
+        
         {/* Deskripsi per tipe (dinamis) */}
         <div className="mt-2 space-y-2 text-xs">
           <div className="tip tip-single rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
@@ -584,12 +784,31 @@ export default async function EditPackagePage(
           <input id="required" name="required" type="checkbox" /> Required
         </label>
       </div>
-
+      
       <div className="sm:col-span-2">
         <label htmlFor="image" className="mb-1 block text-sm font-medium text-gray-800">Gambar (opsional)</label>
         <input id="image" name="image" type="file" accept="image/*" className={fileCls} />
         <p className="mt-1 text-xs text-gray-500">PNG/JPEG/WEBP, maks 2MB.</p>
       </div>
+      
+{/* ⬇️ Tambahkan ini */}
+<div className="sm:col-span-2">
+  <label className="mb-1 block text-sm font-medium text-gray-800">
+    Tautkan ke Passage (opsional)
+  </label>
+  <select name="passageId" defaultValue="" className={inputCls}>
+  <option value="">— Tidak ditautkan —</option>
+  {passages.map(p => (
+    <option key={`passopt-${p.id}`} value={p.id}>
+      {p.title ?? 'Tanpa judul'}
+    </option>
+  ))}
+</select>
+  <p className="mt-1 text-xs text-gray-500">
+    Soal akan tampil di bawah passage tersebut pada tampilan peserta.
+  </p>
+</div>
+{/* ⬆️ Sampai sini */}
 
       <div className="sm:col-span-2">
         <label htmlFor="text" className="mb-1 block text-sm font-medium text-gray-800">Teks soal</label>
@@ -597,15 +816,25 @@ export default async function EditPackagePage(
       </div>
     </div>
 
+    <div className="sm:col-span-2">
+  <label htmlFor="contextText" className="mb-1 block text-sm font-medium text-gray-800">
+    Teks pendukung (opsional)
+  </label>
+  <textarea id="contextText" name="contextText" placeholder="Paragraf/penjelasan singkat sebelum pertanyaan…" rows={3} className={inputCls} />
+  <p className="mt-1 text-xs text-gray-500">Contoh: mini-passage, deskripsi studi kasus, atau tabel ringkas.</p>
+</div>
+
+
     {/* ====== OPSI A–D (Single/Multi) ====== */}
     <div className="section section-single section-multi mt-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        {(['A','B','C','D'] as const).map(L => (
-          <div key={L}>
-            <label className="mb-1 block text-sm font-medium text-gray-800">Opsi {L}</label>
-            <input name={L} placeholder={`Opsi ${L}`} className={inputCls} />
-          </div>
-        ))}
+      {(['A','B','C','D','E'] as const).map(L => (
+  <div key={L}>
+    <label className="mb-1 block text-sm font-medium text-gray-800">Opsi {L}{L==='E' ? ' (opsional)' : ''}</label>
+    <input name={L} placeholder={`Opsi ${L}`} className={inputCls} />
+  </div>
+))}
+
       </div>
 
       {/* Single Choice: pilih 1 benar */}
@@ -614,7 +843,7 @@ export default async function EditPackagePage(
         <select name="correctLabel" className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
           <option value="">—</option>
           <option value="A">A</option><option value="B">B</option>
-          <option value="C">C</option><option value="D">D</option>
+          <option value="C">C</option><option value="D">D</option><option value="E">E</option>
         </select>
       </div>
 
@@ -622,11 +851,12 @@ export default async function EditPackagePage(
       <div className="mt-3 section section-multi">
         <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Multi Select)</label>
         <div className="flex gap-4 text-sm">
-          {(['A','B','C','D'] as const).map(L => (
-            <label key={`cm-${L}`} className="inline-flex items-center gap-2">
-              <input type="checkbox" name="correctMulti" value={L} /> {L}
-            </label>
-          ))}
+        {(['A','B','C','D','E'] as const).map(L => (
+  <label key={`cm-${L}`} className="inline-flex items-center gap-2">
+    <input type="checkbox" name="correctMulti" value={L} /> {L}
+  </label>
+))}
+
         </div>
       </div>
     </div>
@@ -789,6 +1019,13 @@ export default async function EditPackagePage(
 
                   <div className="mt-2 leading-relaxed text-gray-800">{q.text}</div>
 
+                  {(q as any).contextText && (
+  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+    {(q as any).contextText}
+  </div>
+)}
+
+
                   {q.imageUrl && (
                     <img
                       src={q.imageUrl}
@@ -905,23 +1142,45 @@ export default async function EditPackagePage(
     </div>
 
     <div className="sm:col-span-2">
+  <label className="mb-1 block text-sm font-medium text-gray-800">
+    Tautkan ke Passage (opsional)
+  </label>
+  <select name="passageId" defaultValue={q.passage?.id ?? ''} className={inputCls}>
+    <option value="">— Tidak ditautkan —</option>
+    {passages.map(p => (
+      <option key={`passopt-${q.id}-${p.id}`} value={p.id}>
+        {p.title ?? 'Tanpa judul'}
+      </option>
+    ))}
+  </select>
+</div>
+
+    <div className="sm:col-span-2">
       <label className="mb-1 block text-sm font-medium text-gray-800">Teks soal</label>
       <textarea name="text" defaultValue={q.text} rows={3} className={inputCls} />
     </div>
   </div>
 
+  <div className="sm:col-span-2">
+  <label className="mb-1 block text-sm font-medium text-gray-800">Teks pendukung (opsional)</label>
+  <textarea name="contextText" defaultValue={(q as any).contextText ?? ''} rows={3} className={inputCls} />
+  <p className="mt-1 text-xs text-gray-500">Kosongkan untuk menghapus teks pendukung.</p>
+</div>
+
+
   {/* ====== OPSI A–D (Single/Multi) ====== */}
   <div className="section section-single section-multi grid gap-3 sm:grid-cols-2">
-    {(['A','B','C','D'] as const).map(L => (
-      <div key={`edit-${q.id}-${L}`}>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Opsi {L}</label>
-        <input
-          name={L}
-          defaultValue={q.options.find((o) => o.label === L)?.text ?? ''}
-          className={inputCls}
-        />
-      </div>
-    ))}
+  {(['A','B','C','D','E'] as const).map(L => (
+  <div key={`edit-${q.id}-${L}`}>
+    <label className="mb-1 block text-sm font-medium text-gray-800">Opsi {L}{L==='E' ? ' (opsional)' : ''}</label>
+    <input
+      name={L}
+      defaultValue={q.options.find((o) => o.label === L)?.text ?? ''}
+      className={inputCls}
+    />
+  </div>
+))}
+
 
     {/* Single Choice: pilih 1 benar */}
     <div className="sm:col-span-2 section section-single">
@@ -933,7 +1192,7 @@ export default async function EditPackagePage(
       >
         <option value="">—</option>
         <option value="A">A</option><option value="B">B</option>
-        <option value="C">C</option><option value="D">D</option>
+        <option value="C">C</option><option value="D">D</option><option value="E">E</option>
       </select>
     </div>
 
@@ -941,14 +1200,15 @@ export default async function EditPackagePage(
     <div className="sm:col-span-2 section section-multi">
       <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Multi Select)</label>
       <div className="flex flex-wrap gap-4 text-sm">
-        {(['A','B','C','D'] as const).map(L => {
-          const isC = q.options.find(o => o.label === L)?.isCorrect ?? false
-          return (
-            <label key={`edit-cm-${q.id}-${L}`} className="inline-flex items-center gap-2">
-              <input type="checkbox" name="correctMulti" value={L} defaultChecked={isC} /> {L}
-            </label>
-          )
-        })}
+      {(['A','B','C','D','E'] as const).map(L => {
+  const isC = q.options.find(o => o.label === L)?.isCorrect ?? false
+  return (
+    <label key={`edit-cm-${q.id}-${L}`} className="inline-flex items-center gap-2">
+      <input type="checkbox" name="correctMulti" value={L} defaultChecked={isC} /> {L}
+    </label>
+  )
+})}
+
       </div>
     </div>
   </div>

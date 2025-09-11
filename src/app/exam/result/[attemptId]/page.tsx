@@ -86,7 +86,7 @@ export default async function ResultPage({
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-gray-500">Paket</dt>
-                <dd className="font-semibold text-gray-900">{attempt.ExamPackage.title}</dd>
+                <dd className="font-semibold text-gray-900">{attempt.ExamPackage?.title ?? '-'}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Nama</dt>

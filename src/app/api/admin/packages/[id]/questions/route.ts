@@ -1,32 +1,43 @@
+// src/app/api/admin/packages/[id]/questions/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth'
-const prisma = new PrismaClient()
+
+export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   await requireAdmin()
-  const { id } = params
+  const { id: examPackageId } = params
   const body = await req.json() as {
-    order: number; text: string; imageUrl?: string;
-    options: { label: string; text: string }[]; correctLabel: string
+    order: number
+    text: string
+    imageUrl?: string
+    type: 'SINGLE_CHOICE'|'MULTI_SELECT'|'TRUE_FALSE'|'SHORT_TEXT'|'ESSAY'|'NUMBER'|'RANGE'
+    points?: number
+    required?: boolean
+    settings?: any
+    contextText?: string | null
+    passageId?: string | null
+    options?: { label: 'A'|'B'|'C'|'D'|'E'; text: string; isCorrect?: boolean }[]
   }
+
   const q = await prisma.question.create({
     data: {
-      examPackageId: id,
+      examPackageId,
       order: body.order,
       text: body.text,
       imageUrl: body.imageUrl,
-      options: { create: body.options },
-      correctOptionId: '' // set nanti setelah opsi ada
+      type: body.type,
+      points: body.points ?? 1,
+      required: body.required ?? false,
+      settings: body.settings ?? undefined,
+      contextText: body.contextText ?? undefined,
+      passageId: body.passageId ?? undefined,
+      ...(Array.isArray(body.options) && body.options.length
+        ? { options: { create: body.options.map(o => ({ label: o.label, text: o.text, isCorrect: !!o.isCorrect })) } }
+        : {}),
     },
-    include: { options: true }
   })
-  const correct = q.options.find(o => o.label === body.correctLabel)
-  if (!correct) return NextResponse.json({ error: 'correctLabel invalid' }, { status: 400 })
-  await prisma.question.update({
-    where: { id: q.id },
-    data: { correctOptionId: correct.id }
-  })
-  return NextResponse.json({ ok: true })
+
+  return NextResponse.json({ ok: true, id: q.id })
 }
-export const runtime = 'nodejs'

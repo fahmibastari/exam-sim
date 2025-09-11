@@ -1,7 +1,7 @@
 // src/app/exam/[attemptId]/AttemptClient.tsx
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 
 type Option = { id: string; label: string; text: string }
@@ -13,13 +13,19 @@ type Question = {
   type: 'SINGLE_CHOICE'|'MULTI_SELECT'|'TRUE_FALSE'|'SHORT_TEXT'|'ESSAY'|'NUMBER'|'RANGE'
   settings?: any
   options: Option[]
+  contextText?: string | null                      // ⬅️ baru
+  passage?: { id: string; title: string | null; content: string } | null // ⬅️ baru
 }
-type Payload = { questions: Question[]; timeLimitMin: number | null; endsAt: string | null }
-
 type AnswerShape = {
   selectedOptionIds?: string[]
   valueText?: string
   valueNumber?: number | null
+}
+type Payload = {
+  questions: Question[]
+  timeLimitMin: number | null
+  endsAt: string | null
+  answers: Record<string, AnswerShape>
 }
 
 function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
@@ -63,6 +69,7 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
         setQs(json.questions)
         setTimeLimitMin(json.timeLimitMin ?? null)
         setEndsAt(json.endsAt ?? null)
+        setAnswers(json.answers ?? {})
       } catch (e: any) {
         if (e.name !== 'AbortError') setError(e.message || 'Gagal memuat')
       } finally {
@@ -241,144 +248,171 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
 
       {/* Body */}
       <section className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
-        {qs.map((q) => (
-          <div key={q.id} className={cardCls}>
-            <div className="mb-3 flex items-start gap-3">
-              <div className="shrink-0">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 font-bold text-white">
-                  {q.order}
-                </span>
-              </div>
-              <div className="font-medium leading-relaxed text-gray-900">{q.text}</div>
-            </div>
+        {(() => {
+          const renderedPassages = new Set<string>()
+          return qs.map((q) => (
+            <div key={q.id}>
+              {/* PASSAGE (sekali di atas grup terkait) */}
+              {q.passage && !renderedPassages.has(q.passage.id) && (
+                <>
+                  <div className={cardCls}>
+                    <div className="mb-2 text-sm font-semibold text-gray-900">
+                      {q.passage.title ?? 'Reading'}
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+                      {q.passage.content}
+                    </div>
+                  </div>
+                  {renderedPassages.add(q.passage.id) && null}
+                </>
+              )}
 
-            {q.imageUrl && (
-              <div className="mb-4">
-                <img
-                  src={q.imageUrl}
-                  alt={`Gambar pendukung soal ${q.order}`}
-                  className="mx-auto max-h-64 rounded-xl border border-gray-200 object-contain"
-                />
-              </div>
-            )}
-
-            {/* Render input sesuai tipe */}
-            {q.type === 'SINGLE_CHOICE' && (
-              <fieldset className="grid gap-3 md:grid-cols-2">
-                {q.options.map((o) => {
-                  const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
-                  return (
-                    <label key={o.id} className={optWrap(checked)}>
-                      <input
-                        type="radio"
-                        disabled={expired}
-                        name={q.id}
-                        value={o.id}
-                        checked={checked}
-                        onChange={() => chooseSingle(q.id, o.id)}
-                        className="mt-1"
-                      />
-                      <span className="text-gray-800">
-                        <span className="font-semibold">{o.label}.</span> {o.text}
-                      </span>
-                    </label>
-                  )
-                })}
-              </fieldset>
-            )}
-
-            {q.type === 'MULTI_SELECT' && (
-              <fieldset className="grid gap-3 md:grid-cols-2">
-                {q.options.map((o) => {
-                  const selected = (answers[q.id]?.selectedOptionIds ?? []).includes(o.id)
-                  return (
-                    <label key={o.id} className={optWrap(selected)}>
-                      <input
-                        type="checkbox"
-                        disabled={expired}
-                        checked={selected}
-                        onChange={() => toggleMulti(q.id, o.id)}
-                        className="mt-1"
-                      />
-                      <span className="text-gray-800">
-                        <span className="font-semibold">{o.label}.</span> {o.text}
-                      </span>
-                    </label>
-                  )
-                })}
-              </fieldset>
-            )}
-
-            {q.type === 'TRUE_FALSE' && (
-              <fieldset className="grid gap-3 md:grid-cols-2">
-                {q.options.map((o) => {
-                  const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
-                  return (
-                    <label key={o.id} className={optWrap(checked)}>
-                      <input
-                        type="radio"
-                        disabled={expired}
-                        name={q.id}
-                        value={o.id}
-                        checked={checked}
-                        onChange={() => chooseSingle(q.id, o.id)}
-                        className="mt-1"
-                      />
-                      <span className="text-gray-800">{o.text}</span>
-                    </label>
-                  )
-                })}
-              </fieldset>
-            )}
-
-            {(q.type === 'SHORT_TEXT' || q.type === 'ESSAY') && (
-              <div>
-                <textarea
-                  disabled={expired}
-                  value={answers[q.id]?.valueText || ''}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setAnswers((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] ?? {}), valueText: v } }))
-                    if (!expiredRef.current) saveTextDebounced(q.id, v)
-                  }}
-                  className={selectCls}
-                />
-              </div>
-            )}
-
-            {q.type === 'NUMBER' && (
-              <div className="max-w-sm">
-                <input
-                  type="number"
-                  value={answers[q.id]?.valueNumber ?? ''}
-                  onChange={(e) => setNumber(q.id, e.target.value)}
-                  className={selectCls}
-                  placeholder="Masukkan angka"
-                  disabled={expired}
-                />
-              </div>
-            )}
-
-            {q.type === 'RANGE' && (
-              <div className="grid max-w-sm gap-2">
-                <input
-                  type="number"
-                  value={answers[q.id]?.valueNumber ?? ''}
-                  onChange={(e) => setNumber(q.id, e.target.value)}
-                  className={selectCls}
-                  placeholder={`Nilai antara ${q.settings?.min ?? 'min'} – ${q.settings?.max ?? 'max'}`}
-                  disabled={expired}
-                />
-                <div className="text-xs text-gray-600">
-                  Rentang: {q.settings?.min} – {q.settings?.max}{' '}
-                  {q.settings?.step ? `(step ${q.settings.step})` : ''}
+              {/* KARTU SOAL */}
+              <div className={cardCls}>
+                <div className="mb-3 flex items-start gap-3">
+                  <div className="shrink-0">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 font-bold text-white">
+                      {q.order}
+                    </span>
+                  </div>
+                  <div className="font-medium leading-relaxed text-gray-900">{q.text}</div>
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
 
-        {/* Error inline (jika ada setelah submit gagal) */}
+                {q.imageUrl && (
+                  <div className="mb-4">
+                    <img
+                      src={q.imageUrl}
+                      alt={`Gambar pendukung soal ${q.order}`}
+                      className="mx-auto max-h-64 rounded-xl border border-gray-200 object-contain"
+                    />
+                  </div>
+                )}
+
+                {/* CONTEXT TEXT (opsional) */}
+                {q.contextText && (
+                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    {q.contextText}
+                  </div>
+                )}
+
+                {/* Render input sesuai tipe */}
+                {q.type === 'SINGLE_CHOICE' && (
+                  <fieldset className="grid gap-3 md:grid-cols-2">
+                    {q.options.map((o) => {
+                      const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
+                      return (
+                        <label key={o.id} className={optWrap(checked)}>
+                          <input
+                            type="radio"
+                            disabled={expired}
+                            name={q.id}
+                            value={o.id}
+                            checked={checked}
+                            onChange={() => chooseSingle(q.id, o.id)}
+                            className="mt-1"
+                          />
+                          <span className="text-gray-800">
+                            <span className="font-semibold">{o.label}.</span> {o.text}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </fieldset>
+                )}
+
+                {q.type === 'MULTI_SELECT' && (
+                  <fieldset className="grid gap-3 md:grid-cols-2">
+                    {q.options.map((o) => {
+                      const selected = (answers[q.id]?.selectedOptionIds ?? []).includes(o.id)
+                      return (
+                        <label key={o.id} className={optWrap(selected)}>
+                          <input
+                            type="checkbox"
+                            disabled={expired}
+                            checked={selected}
+                            onChange={() => toggleMulti(q.id, o.id)}
+                            className="mt-1"
+                          />
+                          <span className="text-gray-800">
+                            <span className="font-semibold">{o.label}.</span> {o.text}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </fieldset>
+                )}
+
+                {q.type === 'TRUE_FALSE' && (
+                  <fieldset className="grid gap-3 md:grid-cols-2">
+                    {q.options.map((o) => {
+                      const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
+                      return (
+                        <label key={o.id} className={optWrap(checked)}>
+                          <input
+                            type="radio"
+                            disabled={expired}
+                            name={q.id}
+                            value={o.id}
+                            checked={checked}
+                            onChange={() => chooseSingle(q.id, o.id)}
+                            className="mt-1"
+                          />
+                          <span className="text-gray-800">{o.text}</span>
+                        </label>
+                      )
+                    })}
+                  </fieldset>
+                )}
+
+                {(q.type === 'SHORT_TEXT' || q.type === 'ESSAY') && (
+                  <div>
+                    <textarea
+                      disabled={expired}
+                      value={answers[q.id]?.valueText || ''}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setAnswers((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] ?? {}), valueText: v } }))
+                        if (!expiredRef.current) saveTextDebounced(q.id, v)
+                      }}
+                      className={selectCls}
+                    />
+                  </div>
+                )}
+
+                {q.type === 'NUMBER' && (
+                  <div className="max-w-sm">
+                    <input
+                      type="number"
+                      value={answers[q.id]?.valueNumber ?? ''}
+                      onChange={(e) => setNumber(q.id, e.target.value)}
+                      className={selectCls}
+                      placeholder="Masukkan angka"
+                      disabled={expired}
+                    />
+                  </div>
+                )}
+
+                {q.type === 'RANGE' && (
+                  <div className="grid max-w-sm gap-2">
+                    <input
+                      type="number"
+                      value={answers[q.id]?.valueNumber ?? ''}
+                      onChange={(e) => setNumber(q.id, e.target.value)}
+                      className={selectCls}
+                      placeholder={`Nilai antara ${q.settings?.min ?? 'min'} – ${q.settings?.max ?? 'max'}`}
+                      disabled={expired}
+                    />
+                    <div className="text-xs text-gray-600">
+                      Rentang: {q.settings?.min} – {q.settings?.max}{' '}
+                      {q.settings?.step ? `(step ${q.settings.step})` : ''}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        })()}
+        {/* Error inline */}
         {error && (
           <div
             role="alert"

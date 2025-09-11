@@ -129,6 +129,7 @@ export default async function PackageResultsPage({
                   <th scope="col">Benar/Total</th>
                   <th scope="col">Nilai</th>
                   <th scope="col">Sumber</th>
+                  <th scope="col">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -178,6 +179,14 @@ export default async function PackageResultsPage({
                             {sumber}
                           </span>
                         </td>
+                        <td>
+  <a
+    href={`/admin/attempts/${a.id}`}
+    className="rounded-md border px-2 py-1 text-xs hover:bg-gray-50"
+  >
+    Review
+  </a>
+</td>
                       </tr>
                     )
                   })
