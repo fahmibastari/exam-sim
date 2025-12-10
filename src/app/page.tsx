@@ -1,201 +1,141 @@
+import Link from "next/link"
+import { ArrowRight, BookOpen, CheckCircle2, ShieldCheck, Zap } from "lucide-react"
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-neutral-50">
-      {/* Top Nav */}
-      <header className="border-b bg-white/70 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm">
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-              <path fill="currentColor" d="M12 3 2 8l10 5 8-4.1V15h2V8L12 3zm-6 9.2V16c0 2.2 3.1 4 6 4s6-1.8 6-4v-3.8l-6 3-6-3z"/>
-            </svg>
-          </span>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium uppercase tracking-wide text-blue-700">
-                Platform Simulasi Ujian
-              </span>
-              <span className="text-xs text-gray-500">Untuk Siswa</span>
+    <>
+      {/* Hero Section */}
+      <section className="relative overflow-hidden pt-16 pb-24 lg:pt-32">
+        {/* Background decoration */}
+        <div className="absolute inset-0 -z-10 opacity-30 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"></div>
+        <div className="absolute top-0 right-0 -z-10 h-[600px] w-[600px] rounded-full bg-indigo-100 blur-3xl opacity-40 translate-x-1/3 -translate-y-1/4"></div>
+
+        <div className="mx-auto max-w-7xl px-6 lg:px-8 text-center lg:text-left lg:flex lg:items-center lg:gap-16">
+          <div className="lg:w-1/2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200 mb-6">
+              <span className="flex h-2 w-2 rounded-full bg-indigo-600"></span>
+              Sistem Ujian Online Terpercaya
             </div>
-          </div>
-
-          <a
-            href="/login"
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            Admin Login
-          </a>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <section className="mx-auto mt-12 max-w-6xl px-6">
-        <div className="grid items-center gap-10 rounded-2xl bg-white p-10 shadow-sm ring-1 ring-gray-200 md:grid-cols-2">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-blue-700">
-            SELAMAT DATANG
-            </p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-gray-900">
-            SIMULASI UJIAN UNTUK SISWA
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-6xl lg:leading-[1.1]">
+              Simulasi Ujian <br />
+              <span className="text-indigo-600">Lebih Fokus & Aman</span>
             </h1>
-            <p className="mt-4 text-base leading-relaxed text-gray-600">
-              Pilih paket ujian, masukkan token, lalu isi data diri dengan benar.
+            <p className="mt-6 text-lg leading-8 text-slate-600 max-w-2xl mx-auto lg:mx-0">
+              Platform unifikasi ujian untuk siswa dan institusi. Tanpa gangguan, anti-curang, dan hasil instan. Fokus kerjakan soal, biarkan kami yang mengurus sisanya.
             </p>
-
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <a
+            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+              <Link
                 href="/exam/join"
-                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
               >
-                Mulai Ujian
-              </a>
+                Masuk ke Ujian <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="#features"
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:-translate-y-0.5"
+              >
+                Pelajari Fitur
+              </Link>
             </div>
 
-            <p className="mt-6 text-xs text-gray-500">
-              Pastikan token dan data sesuai ketentuan yang berlaku.
-            </p>
+            <div className="mt-10 flex items-center justify-center lg:justify-start gap-x-6 text-sm">
+              <div className="flex -space-x-2 overflow-hidden">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-slate-200" />
+                ))}
+              </div>
+              <div className="text-slate-600">Digunakan oleh <span className="font-bold text-slate-900">500+</span> Siswa</div>
+            </div>
+
           </div>
 
-          {/* Info panel */}
-          
-        </div>
-      </section>
-
-      {/* Section ringkas (opsional, tetap ringan) */}
-      <section className="mx-auto mt-12 max-w-6xl px-6">
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <h3 className="text-sm font-semibold text-gray-900">Keamanan Dasar</h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Token unik dan validasi input mengurangi akses yang tidak sah.
-            </p>
-          </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <h3 className="text-sm font-semibold text-gray-900">Pengalaman Terarah</h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Alur jelas: pilih paket, masukkan token, isi data diri, mulai ujian.
-            </p>
-          </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <h3 className="text-sm font-semibold text-gray-900">Siap Produksi</h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Desain bersih, ringan, dan mudah dipelihara untuk penggunaan jangka panjang.
-            </p>
+          {/* Hero Visual Placeholder */}
+          <div className="hidden lg:block lg:w-1/2 relative">
+            <div className="relative rounded-2xl bg-slate-900/5 p-4 ring-1 ring-inset ring-slate-900/10 lg:rounded-3xl lg:p-6">
+              <div className="bg-white rounded-xl shadow-2xl ring-1 ring-slate-900/5 overflow-hidden min-h-[400px] flex items-center justify-center">
+                <div className="text-center p-8">
+                  <div className="mx-auto h-20 w-20 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4">
+                    <BookOpen className="h-10 w-10 text-indigo-600" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900">Visual Dashboard</h3>
+                  <p className="text-sm text-slate-500 mt-2">Pratinjau antarmuka ujian akan muncul di sini.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-  {/* Footer */}
-<footer className="mt-16 border-t border-gray-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:border-gray-800 dark:bg-gray-950/70">
-  <div className="mx-auto max-w-7xl px-6">
-    {/* Top: brand + nav columns */}
-    <div className="grid gap-10 py-12 md:grid-cols-4">
-      {/* Brand */}
-      <div className="md:col-span-1">
-        <a href="/" className="inline-flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
-            {/* Simple mark (graduation cap) */}
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-              <path fill="currentColor" d="M12 3 2 8l10 5 8-4.1V15h2V8L12 3zm-6 9.2V16c0 2.2 3.1 4 6 4s6-1.8 6-4v-3.8l-6 3-6-3z"/>
-            </svg>
-          </span>
-          <span className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            Simulasi Ujian
-          </span>
-        </a>
-        <p className="mt-4 text-sm leading-6 text-gray-600 dark:text-gray-400">
-          Platform simulasi ujian untuk siswa & institusi—stabil, aman, dan mudah digunakan.
-        </p>
-      </div>
+      {/* Features Grid */}
+      <section id="features" className="py-24 bg-white sm:py-32">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-base font-semibold leading-7 text-indigo-600">Mengapa Memilih Kami?</h2>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              Semua yang Anda butuhkan untuk ujian lancar
+            </p>
+            <p className="mt-6 text-lg leading-8 text-slate-600">
+              Kami merancang sistem ini dengan fokus pada kecepatan, keamanan, dan kemudahan penggunaan bagi siswa maupun pengawas.
+            </p>
+          </div>
+          <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
+            <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-3">
+              <div className="flex flex-col rounded-2xl border border-slate-200 p-8 transition-shadow hover:shadow-lg">
+                <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-slate-900">
+                  <ShieldCheck className="h-8 w-8 text-indigo-600 flex-none" aria-hidden="true" />
+                  Keamanan Terjamin
+                </dt>
+                <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-slate-600">
+                  <p className="flex-auto">Token unik setiap sesi dan validasi ketat memastikan hanya peserta terdaftar yang bisa mengakses ujian.</p>
+                </dd>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-slate-200 p-8 transition-shadow hover:shadow-lg">
+                <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-slate-900">
+                  <Zap className="h-8 w-8 text-indigo-600 flex-none" aria-hidden="true" />
+                  Performa Cepat
+                </dt>
+                <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-slate-600">
+                  <p className="flex-auto">Dibangun dengan teknologi modern untuk waktu muat instan tanpa lag di tengah ujian.</p>
+                </dd>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-slate-200 p-8 transition-shadow hover:shadow-lg">
+                <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-slate-900">
+                  <CheckCircle2 className="h-8 w-8 text-indigo-600 flex-none" aria-hidden="true" />
+                  Mudah Digunakan
+                </dt>
+                <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-slate-600">
+                  <p className="flex-auto">Antarmuka intuitif. Siswa bisa langsung fokus mengerjakan soal tanpa bingung cara penggunaan.</p>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
 
-      {/* Columns */}
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Produk
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/features" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Fitur</a></li>
-          <li><a href="/pricing" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Harga</a></li>
-          <li><a href="/docs" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Dokumentasi</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Perusahaan
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/about" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Tentang</a></li>
-          <li><a href="/careers" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Karier</a></li>
-          <li><a href="/contact" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Kontak</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Dukungan
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/status" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Status Layanan</a></li>
-          <li><a href="/privacy" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Kebijakan Privasi</a></li>
-          <li><a href="/terms" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Syarat & Ketentuan</a></li>
-        </ul>
-      </div>
-    </div>
-
-    {/* Bottom bar */}
-    <div className="flex flex-col-reverse items-center justify-between gap-4 border-t border-gray-200 py-6 text-sm md:flex-row dark:border-gray-800">
-      <p className="text-gray-600 dark:text-gray-400">
-        © {new Date().getFullYear()} Simulasi Ujian. All rights reserved.
-      </p>
-
-      <div className="flex flex-col items-center gap-3 md:flex-row">
-        <p className="text-gray-600 dark:text-gray-400">
-          Dibuat oleh
-        </p>
-
-        <span className="hidden h-4 w-px bg-gray-200 md:block dark:bg-gray-800" aria-hidden="true" />
-
-        {/* Social icons */}
-        <div className="flex items-center gap-2">
-  <a
-    href="https://instagram.com/fahmibastari"
-    target="_blank"
-    rel="noopener noreferrer"
-    title="Instagram @fahmibastari"
-    aria-label="Instagram @fahmibastari"
-    className="group inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-900/50"
-  >
-    <svg viewBox="0 0 24 24" className="h-4 w-4 opacity-80 transition group-hover:opacity-100" aria-hidden="true">
-      <path fill="currentColor" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7m9.5 2.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10m0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/>
-    </svg>
-    <span className="underline decoration-gray-300/70 underline-offset-4 group-hover:decoration-gray-400">
-      Fahmi Bastari
-    </span>
-  </a>
-
-  <span className="h-4 w-px bg-gray-200 dark:bg-gray-800" aria-hidden="true" />
-
-  <a
-    href="https://instagram.com/qorrieaa"
-    target="_blank"
-    rel="noopener noreferrer"
-    title="Instagram @qorriea"
-    aria-label="Instagram @qorriea"
-    className="group inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-900/50"
-  >
-    <svg viewBox="0 0 24 24" className="h-4 w-4 opacity-80 transition group-hover:opacity-100" aria-hidden="true">
-      <path fill="currentColor" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7m9.5 2.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10m0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/>
-    </svg>
-    <span className="underline decoration-gray-300/70 underline-offset-4 group-hover:decoration-gray-400">
-      Qorrie Aina
-    </span>
-  </a>
-</div>
-
-      </div>
-    </div>
-  </div>
-</footer>
-    </main>
+      {/* Testimony Section (Optional Placeholder) */}
+      <section id="testimony" className="py-24 sm:py-32">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="bg-indigo-900 relative isolate overflow-hidden px-6 py-24 text-center shadow-2xl rounded-3xl sm:px-16">
+            <h2 className="mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Siap untuk ujian yang lebih baik?
+            </h2>
+            <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-indigo-200">
+              Bergabung bersama ribuan siswa dan pengawas yang telah merasakan kemudahan ExamSim.
+            </p>
+            <div className="mt-10 flex items-center justify-center gap-x-6">
+              <Link
+                href="/register"
+                className="rounded-md bg-white px-3.5 py-2.5 text-sm font-semibold text-indigo-600 shadow-sm hover:bg-indigo-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              >
+                Daftar Sebagai Admin
+              </Link>
+              <Link href="/docs" className="text-sm font-semibold leading-6 text-white">
+                Pelajari lebih lanjut <span aria-hidden="true">→</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
   )
 }

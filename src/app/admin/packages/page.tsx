@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
+import { Plus, Check, Clock, FileText, Users, Search, MoreHorizontal, Globe, Play, Lock, AlertCircle } from 'lucide-react'
 
 const CreateSchema = z.object({
   title: z.string().trim().min(3, 'Judul minimal 3 huruf'),
@@ -12,24 +13,6 @@ const CreateSchema = z.object({
     z.string().trim().max(2000).optional()
   ),
   token: z.string().trim().min(4, 'Token minimal 4 karakter'),
-  timeLimitMin: z.union([
-    z.literal('').transform(() => undefined),
-    z.coerce.number().int().min(1, 'Batas menit minimal 1'),
-  ]).optional(),
-})
-
-// Schema edit paket (token opsional; kosong = tidak mengubah)
-const UpdateSchema = z.object({
-  id: z.string().min(1, 'ID tidak valid'),
-  title: z.string().trim().min(3, 'Judul minimal 3 huruf'),
-  description: z.preprocess(
-    v => (typeof v === 'string' && v.trim() === '' ? undefined : v),
-    z.string().trim().max(2000).optional()
-  ),
-  token: z.union([
-    z.literal('').transform(() => undefined), // kosong = tidak ganti token
-    z.string().trim().min(4, 'Token minimal 4 karakter'),
-  ]).optional(),
   timeLimitMin: z.union([
     z.literal('').transform(() => undefined),
     z.coerce.number().int().min(1, 'Batas menit minimal 1'),
@@ -67,31 +50,6 @@ export default async function AdminPackagesPage() {
     revalidatePath('/admin/packages')
   }
 
-  async function updatePackage(formData: FormData) {
-    'use server'
-    const raw = Object.fromEntries(formData.entries())
-    const parsed = UpdateSchema.safeParse(raw)
-    if (!parsed.success) {
-      const msg = parsed.error.issues.map(i => i.message).join(', ')
-      throw new Error('Data tidak valid: ' + msg)
-    }
-
-    const { id, title, description, token, timeLimitMin } = parsed.data
-    const data: any = {
-      title,
-      description: description ?? null,
-      timeLimitMin: typeof timeLimitMin === 'number' ? timeLimitMin : null,
-    }
-
-    if (typeof token === 'string' && token.length > 0) {
-      const bcrypt = (await import('bcryptjs')).default
-      data.tokenHash = await bcrypt.hash(token, 10)
-    }
-
-    await prisma.examPackage.update({ where: { id }, data })
-    revalidatePath('/admin/packages')
-  }
-
   async function toggleActive(formData: FormData) {
     'use server'
     const id = String(formData.get('id') ?? '')
@@ -115,285 +73,205 @@ export default async function AdminPackagesPage() {
 
   // ===== UI helpers =====
   const inputCls =
-    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30'
-  const cardCls = 'rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200'
+    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+  const cardCls = 'rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200'
 
   return (
-    <main className="min-h-screen bg-neutral-50">
-      {/* Top Nav */}
-      
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Manajemen Paket Soal</h1>
+          <p className="mt-1 text-sm text-slate-600">Buat, kelola, dan publikasikan paket ujian Anda di sini.</p>
+        </div>
+      </div>
 
-      <section className="mx-auto max-w-6xl px-6 py-8 space-y-8">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Admin — Paket Soal</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Kelola paket ujian, token, dan batas waktu.
-            </p>
-          </div>
+      <div className="grid gap-8 lg:grid-cols-3">
+        {/* Left Column: Create Form */}
+        <div className="lg:col-span-1">
+          <form action={createPackage} className={`${cardCls} sticky top-24`}>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                <Plus className="h-5 w-5" />
+              </div>
+              <h2 className="text-base font-semibold text-slate-900">Buat Paket Baru</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="title" className="mb-1 block text-xs font-medium text-slate-700 uppercase tracking-wider">
+                  Judul Paket
+                </label>
+                <input
+                  id="title"
+                  name="title"
+                  placeholder="Contoh: UAS Matematika 2024"
+                  className={inputCls}
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="timeLimitMin" className="mb-1 block text-xs font-medium text-slate-700 uppercase tracking-wider">
+                  Durasi (Menit)
+                </label>
+                <div className="relative">
+                  <Clock className="absolute top-2.5 left-3 h-4 w-4 text-slate-400" />
+                  <input
+                    id="timeLimitMin"
+                    name="timeLimitMin"
+                    type="number"
+                    min={1}
+                    placeholder="Kosong = Tanpa Batas"
+                    className={`${inputCls} pl-9`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="description" className="mb-1 block text-xs font-medium text-slate-700 uppercase tracking-wider">
+                  Deskripsi
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  placeholder="Info tambahan untuk peserta..."
+                  rows={3}
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="token" className="mb-1 block text-xs font-medium text-slate-700 uppercase tracking-wider">
+                  Token Akses
+                </label>
+                <div className="relative">
+                  <Lock className="absolute top-2.5 left-3 h-4 w-4 text-slate-400" />
+                  <input
+                    id="token"
+                    name="token"
+                    placeholder="Minimal 4 karakter"
+                    autoComplete="off"
+                    className={`${inputCls} pl-9 font-mono`}
+                    required
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-slate-500">Token digunakan peserta untuk masuk ujian.</p>
+              </div>
+
+              <div className="pt-2">
+                <button className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow-md active:translate-y-0.5">
+                  <Plus className="h-4 w-4" />
+                  Buat Paket
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
 
-        {/* Create Card */}
-        <form action={createPackage} className={cardCls}>
-          <h2 className="text-lg font-semibold text-gray-900">Buat Paket Baru</h2>
+        {/* Right Column: List */}
+        <div className="lg:col-span-2 space-y-4">
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+            <FileText className="h-5 w-5 text-slate-400" />
+            Daftar Paket ({pkgs.length})
+          </h2>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="title" className="mb-1 block text-sm font-medium text-gray-800">
-                Judul paket
-              </label>
-              <input
-                id="title"
-                name="title"
-                placeholder="Contoh: Matematika Kelas 6"
-                className={inputCls}
-                required
-              />
+          {pkgs.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+                <Package className="h-6 w-6 text-slate-400" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-900">Belum ada paket</h3>
+              <p className="mt-1 text-sm text-slate-500">Buat paket ujian pertama Anda di panel sebelah kiri.</p>
             </div>
+          ) : (
+            <div className="grid gap-4">
+              {pkgs.map((p) => (
+                <div key={p.id} className="group relative rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md hover:ring-indigo-500/30">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-base font-semibold text-slate-900 truncate pr-2">
+                          {p.title}
+                        </h3>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${p.isActive ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-slate-50 text-slate-600 ring-slate-500/20'
+                          }`}>
+                          {p.isActive ? 'Aktif' : 'Draft'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          {p.timeLimitMin ? `${p.timeLimitMin} Menit` : 'Tanpa Batas'}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {p._count.questions} Soal
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5" />
+                          {p._count.attempts} Peserta
+                        </div>
+                      </div>
+                      {p.description && (
+                        <p className="mt-2 text-sm text-slate-600 line-clamp-2">{p.description}</p>
+                      )}
+                    </div>
 
-            <div>
-              <label htmlFor="timeLimitMin" className="mb-1 block text-sm font-medium text-gray-800">
-                Batas menit (opsional)
-              </label>
-              <input
-                id="timeLimitMin"
-                name="timeLimitMin"
-                type="number"
-                min={1}
-                step={1}
-                placeholder="Biarkan kosong bila tanpa batas"
-                className={inputCls}
-              />
-              <p className="mt-1 text-[12px] text-gray-500">Kosongkan untuk tanpa batas waktu.</p>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="description" className="mb-1 block text-sm font-medium text-gray-800">
-                Deskripsi (opsional)
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                placeholder="Keterangan singkat paket..."
-                rows={3}
-                className={inputCls}
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="token" className="mb-1 block text-sm font-medium text-gray-800">
-                Token paket (plaintext)
-              </label>
-              <input
-                id="token"
-                name="token"
-                placeholder="Contoh: ABCD1234"
-                autoComplete="off"
-                className={inputCls}
-                required
-              />
-              <p className="mt-1 text-[12px] text-gray-500">Token akan otomatis di-hash ketika disimpan.</p>
-            </div>
-          </div>
-
-          <div className="pt-3">
-            <button
-              className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              Simpan
-            </button>
-          </div>
-        </form>
-
-        {/* List */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">Daftar Paket</h2>
-
-          <ul className="divide-y rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
-            {pkgs.map((p: typeof pkgs[number]) => (
-              <li key={p.id} className="flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-start">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="truncate font-semibold text-gray-900">{p.title}</div>
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${
-                        p.isActive
-                          ? 'border-green-200 bg-green-50 text-green-700'
-                          : 'border-gray-200 bg-gray-50 text-gray-700'
-                      }`}
-                    >
-                      {p.isActive ? 'Published' : 'Draft'}
-                    </span>
-                    {typeof p.timeLimitMin === 'number' && (
-                      <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                        {p.timeLimitMin} mnt
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 self-start pt-1">
+                      <form action={toggleActive}>
+                        <input type="hidden" name="id" value={p.id} />
+                        <input type="hidden" name="to" value={(!p.isActive).toString()} />
+                        <button
+                          title={p.isActive ? 'Matikan' : 'Aktifkan'}
+                          className={`p-2 rounded-lg transition-colors ${p.isActive
+                              ? 'text-green-600 hover:bg-green-50'
+                              : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                            }`}
+                        >
+                          {p.isActive ? <Play className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5" />}
+                        </button>
+                      </form>
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm text-gray-600">
-                    Soal: {p._count.questions} · Attempt: {p._count.attempts}
-                  </div>
-                  {p.description && (
-                    <p className="mt-1 line-clamp-2 text-sm text-gray-500">{p.description}</p>
-                  )}
-                </div>
 
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <a
-                    href={`/admin/packages/${p.id}`}
-                    className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
-                  >
-                    Kelola Soal
-                  </a>
-
-                  {/* Kelola Paket */}
-                  <a
-                    href={`/admin/packages/${p.id}/settings`}
-                    className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
-                  >
-                    Kelola Paket
-                  </a>
-
-                  <a
-                    href={`/admin/packages/${p.id}/results`}
-                    className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
-                  >
-                    Peserta & Nilai
-                  </a>
-
-                  <form action={toggleActive}>
-                    <input type="hidden" name="id" value={p.id} />
-                    <input type="hidden" name="to" value={(!p.isActive).toString()} />
-                    <button
-                      className={`rounded-lg px-3 py-2 text-sm font-medium transition border ${
-                        p.isActive
-                          ? 'border-red-200 bg-white text-red-600 hover:bg-red-50'
-                          : 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
+                  <div className="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4">
+                    <a
+                      href={`/admin/packages/${p.id}`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-indigo-600 shadow-sm ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50"
                     >
-                      {p.isActive ? 'Unpublish' : 'Publish'}
-                    </button>
-                  </form>
+                      Kelola Soal
+                    </a>
+                    <a
+                      href={`/admin/packages/${p.id}/settings`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+                    >
+                      Edit Paket
+                    </a>
+                    <a
+                      href={`/admin/packages/${p.id}/results`}
+                      className="ml-auto inline-flex items-center justify-center gap-1.5 text-sm font-medium text-slate-500 hover:text-indigo-600"
+                    >
+                      Lihat Hasil <ArrowRight className="h-4 w-4" />
+                    </a>
+                  </div>
                 </div>
-              </li>
-            ))}
-          </ul>
+              ))}
+            </div>
+          )}
         </div>
-      </section>
-
-           {/* Footer */}
-<footer className="mt-16 border-t border-gray-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:border-gray-800 dark:bg-gray-950/70">
-  <div className="mx-auto max-w-7xl px-6">
-    {/* Top: brand + nav columns */}
-    <div className="grid gap-10 py-12 md:grid-cols-4">
-      {/* Brand */}
-      <div className="md:col-span-1">
-        <a href="/" className="inline-flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
-            {/* Simple mark (graduation cap) */}
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-              <path fill="currentColor" d="M12 3 2 8l10 5 8-4.1V15h2V8L12 3zm-6 9.2V16c0 2.2 3.1 4 6 4s6-1.8 6-4v-3.8l-6 3-6-3z"/>
-            </svg>
-          </span>
-          <span className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            Simulasi Ujian
-          </span>
-        </a>
-        <p className="mt-4 text-sm leading-6 text-gray-600 dark:text-gray-400">
-          Platform simulasi ujian untuk siswa & institusi—stabil, aman, dan mudah digunakan.
-        </p>
-      </div>
-
-      {/* Columns */}
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Produk
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/features" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Fitur</a></li>
-          <li><a href="/pricing" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Harga</a></li>
-          <li><a href="/docs" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Dokumentasi</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Perusahaan
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/about" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Tentang</a></li>
-          <li><a href="/careers" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Karier</a></li>
-          <li><a href="/contact" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Kontak</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Dukungan
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/status" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Status Layanan</a></li>
-          <li><a href="/privacy" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Kebijakan Privasi</a></li>
-          <li><a href="/terms" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Syarat & Ketentuan</a></li>
-        </ul>
       </div>
     </div>
+  )
+}
 
-    {/* Bottom bar */}
-    <div className="flex flex-col-reverse items-center justify-between gap-4 border-t border-gray-200 py-6 text-sm md:flex-row dark:border-gray-800">
-      <p className="text-gray-600 dark:text-gray-400">
-        © {new Date().getFullYear()} Simulasi Ujian. All rights reserved.
-      </p>
-
-      <div className="flex flex-col items-center gap-3 md:flex-row">
-        <p className="text-gray-600 dark:text-gray-400">
-          Dibuat oleh
-        </p>
-
-        <span className="hidden h-4 w-px bg-gray-200 md:block dark:bg-gray-800" aria-hidden="true" />
-
-        {/* Social icons */}
-        <div className="flex items-center gap-2">
-  <a
-    href="https://instagram.com/fahmibastari"
-    target="_blank"
-    rel="noopener noreferrer"
-    title="Instagram @fahmibastari"
-    aria-label="Instagram @fahmibastari"
-    className="group inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-900/50"
-  >
-    <svg viewBox="0 0 24 24" className="h-4 w-4 opacity-80 transition group-hover:opacity-100" aria-hidden="true">
-      <path fill="currentColor" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7m9.5 2.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10m0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/>
-    </svg>
-    <span className="underline decoration-gray-300/70 underline-offset-4 group-hover:decoration-gray-400">
-      Fahmi Bastari
-    </span>
-  </a>
-
-  <span className="h-4 w-px bg-gray-200 dark:bg-gray-800" aria-hidden="true" />
-
-  <a
-    href="https://instagram.com/qorrieaa"
-    target="_blank"
-    rel="noopener noreferrer"
-    title="Instagram @qorriea"
-    aria-label="Instagram @qorriea"
-    className="group inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-900/50"
-  >
-    <svg viewBox="0 0 24 24" className="h-4 w-4 opacity-80 transition group-hover:opacity-100" aria-hidden="true">
-      <path fill="currentColor" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7m9.5 2.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10m0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/>
-    </svg>
-    <span className="underline decoration-gray-300/70 underline-offset-4 group-hover:decoration-gray-400">
-      Qorrie Aina
-    </span>
-  </a>
-</div>
-
-      </div>
-    </div>
-  </div>
-</footer>
-    </main>
+function ArrowRight(props: any) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+  )
+}
+function Package(props: any) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4.27 9 5.15" /><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22v-9" /></svg>
   )
 }

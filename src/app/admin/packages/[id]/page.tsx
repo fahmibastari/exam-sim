@@ -8,6 +8,9 @@ import { prisma } from '@/lib/prisma'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
+import Link from 'next/link'
+import { ArrowLeft, Plus, Image as ImageIcon, Trash2, Edit2, GripVertical, FileText, CheckSquare, Save, X, ChevronDown, ChevronRight, LayoutList, AlertCircle } from 'lucide-react'
+import ConfirmDeleteForm from '@/app/admin/_components/ConfirmDeleteForm'
 
 // ===== Zod helpers =====
 const BoolFromCheckbox = z.preprocess(
@@ -36,7 +39,7 @@ const NumMin0OrEmpty = z.preprocess(toEmpty, z.union([z.literal(''), z.coerce.nu
 const IntPosOrEmpty = z.preprocess(toEmpty, z.union([z.literal(''), z.coerce.number().int().positive()]))
 
 const QuestionTypeEnum = z.enum([
-  'SINGLE_CHOICE','MULTI_SELECT','TRUE_FALSE','SHORT_TEXT','ESSAY','NUMBER','RANGE',
+  'SINGLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE', 'SHORT_TEXT', 'ESSAY', 'NUMBER', 'RANGE',
 ])
 
 const BaseQSchema = z.object({
@@ -46,7 +49,7 @@ const BaseQSchema = z.object({
   type: QuestionTypeEnum,
   points: z.coerce.number().int().min(0).default(1),
   required: BoolFromCheckbox.default(false),
-  contextText: OptionalNonEmpty.optional(), // ✅ sekarang aman
+  contextText: OptionalNonEmpty.optional(),
 })
 
 // Tambahan field opsional per tipe
@@ -104,7 +107,7 @@ type OptionRow = { id: string; label: string; text: string; isCorrect: boolean }
 // Infer TransactionClient TANPA mengimpor Prisma.* (aman di index-browser)
 type Tx =
   Extract<Parameters<typeof prisma.$transaction>[0], (arg: any) => any> extends
-    (arg: infer A) => any ? A : never
+  (arg: infer A) => any ? A : never
 
 // ===== Page component =====
 export default async function EditPackagePage(
@@ -143,7 +146,7 @@ export default async function EditPackagePage(
   // ===== CREATE =====
   async function addQuestion(formData: FormData) {
     'use server'
-    const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A'|'B'|'C'|'D'|'E'>
+    const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A' | 'B' | 'C' | 'D' | 'E'>
 
     const raw = {
       order: formData.get('order'),
@@ -193,7 +196,7 @@ export default async function EditPackagePage(
       orderBy: { order: 'desc' },
       select: { order: true },
     })
-    
+
     let safeOrder = Number(p.order)
     if (!Number.isFinite(safeOrder) || safeOrder <= 0) {
       safeOrder = (last?.order ?? 0) + 1
@@ -215,7 +218,7 @@ export default async function EditPackagePage(
     let settings: Record<string, any> | undefined = undefined
 
     if (type === 'SINGLE_CHOICE') {
-      const labels4: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
+      const labels4: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
       for (const L of labels4) {
         const text = (p as any)[L]
         if (!text || String(text).trim() === '') {
@@ -223,14 +226,14 @@ export default async function EditPackagePage(
         }
       }
       if (!p.correctLabel) throw new Error('Pilih jawaban benar (Single Choice)')
-    
+
       // validasi jika correctLabel = 'E', pastikan E terisi
       if (p.correctLabel === 'E') {
         if (!p.E || String(p.E).trim() === '') {
           throw new Error('Opsi E dipilih sebagai jawaban benar, tetapi kosong')
         }
       }
-    
+
       options = [
         { label: 'A', text: String(p.A), isCorrect: p.correctLabel === 'A' },
         { label: 'B', text: String(p.B), isCorrect: p.correctLabel === 'B' },
@@ -242,10 +245,10 @@ export default async function EditPackagePage(
         options.push({ label: 'E', text: String(p.E), isCorrect: p.correctLabel === 'E' })
       }
     }
-    
+
 
     if (type === 'MULTI_SELECT') {
-      const labels4: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
+      const labels4: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
       for (const L of labels4) {
         const text = (p as any)[L]
         if (!text || String(text).trim() === '') {
@@ -253,12 +256,12 @@ export default async function EditPackagePage(
         }
       }
       if (correctMulti.length === 0) throw new Error('Pilih minimal satu jawaban benar (Multi Select)')
-    
+
       // jika E dicentang sebagai benar, pastikan E terisi
       if (correctMulti.includes('E') && (!p.E || String(p.E).trim() === '')) {
         throw new Error('Opsi E ditandai benar, tetapi kosong')
       }
-    
+
       options = [
         { label: 'A', text: String(p.A), isCorrect: correctMulti.includes('A') },
         { label: 'B', text: String(p.B), isCorrect: correctMulti.includes('B') },
@@ -269,14 +272,14 @@ export default async function EditPackagePage(
         options.push({ label: 'E', text: String(p.E), isCorrect: correctMulti.includes('E') })
       }
     }
-    
+
 
     if (type === 'TRUE_FALSE') {
       const tTrue = (p.tfTrueText ?? 'Benar').toString()
       const tFalse = (p.tfFalseText ?? 'Salah').toString()
       if (!p.correctTF) throw new Error('Pilih jawaban benar (True/False)')
       options = [
-        { label: 'A', text: tTrue,  isCorrect: p.correctTF === 'TRUE'  },
+        { label: 'A', text: tTrue, isCorrect: p.correctTF === 'TRUE' },
         { label: 'B', text: tFalse, isCorrect: p.correctTF === 'FALSE' },
       ]
     }
@@ -332,7 +335,7 @@ export default async function EditPackagePage(
   // ===== UPDATE =====
   async function updateQuestion(formData: FormData) {
     'use server'
-    const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A'|'B'|'C'|'D'|'E'>
+    const correctMulti = formData.getAll('correctMulti').map(String) as Array<'A' | 'B' | 'C' | 'D' | 'E'>
 
     const raw = {
       id: formData.get('id'),
@@ -380,23 +383,23 @@ export default async function EditPackagePage(
     })
     if (!q) throw new Error('Soal tidak ditemukan')
 
-      let safeOrder = Number(p.order)
-      if (!Number.isFinite(safeOrder) || safeOrder <= 0) {
-        safeOrder = q.order // kalau invalid, pertahankan yg lama
-      } else if (safeOrder !== q.order) {
-        const conflict = await prisma.question.findFirst({
-          where: { examPackageId: id, order: safeOrder, NOT: { id: q.id } },
-          select: { id: true },
+    let safeOrder = Number(p.order)
+    if (!Number.isFinite(safeOrder) || safeOrder <= 0) {
+      safeOrder = q.order // kalau invalid, pertahankan yg lama
+    } else if (safeOrder !== q.order) {
+      const conflict = await prisma.question.findFirst({
+        where: { examPackageId: id, order: safeOrder, NOT: { id: q.id } },
+        select: { id: true },
+      })
+      if (conflict) {
+        const last = await prisma.question.findFirst({
+          where: { examPackageId: id },
+          orderBy: { order: 'desc' },
+          select: { order: true },
         })
-        if (conflict) {
-          const last = await prisma.question.findFirst({
-            where: { examPackageId: id },
-            orderBy: { order: 'desc' },
-            select: { order: true },
-          })
-          safeOrder = (last?.order ?? 0) + 1
-        }
+        safeOrder = (last?.order ?? 0) + 1
       }
+    }
 
     let imageUrl = q.imageUrl ?? undefined
     if (p.image && (p.image as any).size > 0) {
@@ -419,24 +422,24 @@ export default async function EditPackagePage(
     }
 
     if (type === 'SINGLE_CHOICE') {
-      const labels4: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
+      const labels4: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
       for (const L of labels4) {
         const text = (p as any)[L]
         if (!text || String(text).trim() === '') throw new Error(`Opsi ${L} wajib diisi`)
       }
       if (!p.correctLabel) throw new Error('Pilih jawaban benar')
-    
+
       // map id existing by label termasuk E
-      const byLabel: Record<'A'|'B'|'C'|'D'|'E', string|undefined> = { A: undefined, B: undefined, C: undefined, D: undefined, E: undefined }
+      const byLabel: Record<'A' | 'B' | 'C' | 'D' | 'E', string | undefined> = { A: undefined, B: undefined, C: undefined, D: undefined, E: undefined }
       q.options.forEach((o: OptionRow) => {
-        if (['A','B','C','D','E'].includes(o.label)) (byLabel as any)[o.label] = o.id
+        if (['A', 'B', 'C', 'D', 'E'].includes(o.label)) (byLabel as any)[o.label] = o.id
       })
-    
+
       // validasi correctLabel === 'E' ⇒ E wajib terisi
       if (p.correctLabel === 'E' && (!p.E || String(p.E).trim() === '')) {
         throw new Error('Opsi E dipilih sebagai jawaban benar, tetapi kosong')
       }
-    
+
       optionsPayload = [
         { id: byLabel.A, label: 'A', text: String(p.A), isCorrect: p.correctLabel === 'A' },
         { id: byLabel.B, label: 'B', text: String(p.B), isCorrect: p.correctLabel === 'B' },
@@ -447,26 +450,27 @@ export default async function EditPackagePage(
         optionsPayload.push({ id: byLabel.E, label: 'E', text: String(p.E), isCorrect: p.correctLabel === 'E' })
       }
     }
-    
-    
+
+
+
 
     if (type === 'MULTI_SELECT') {
-      const labels4: Array<'A'|'B'|'C'|'D'> = ['A','B','C','D']
+      const labels4: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
       for (const L of labels4) {
         const text = (p as any)[L]
         if (!text || String(text).trim() === '') throw new Error(`Opsi ${L} wajib diisi`)
       }
-    
-      const byLabel: Record<'A'|'B'|'C'|'D'|'E', string|undefined> = { A: undefined, B: undefined, C: undefined, D: undefined, E: undefined }
+
+      const byLabel: Record<'A' | 'B' | 'C' | 'D' | 'E', string | undefined> = { A: undefined, B: undefined, C: undefined, D: undefined, E: undefined }
       q.options.forEach((o: OptionRow) => {
-        if (['A','B','C','D','E'].includes(o.label)) (byLabel as any)[o.label] = o.id
+        if (['A', 'B', 'C', 'D', 'E'].includes(o.label)) (byLabel as any)[o.label] = o.id
       })
-    
+
       if (correctMulti.length === 0) throw new Error('Pilih minimal satu jawaban benar')
       if (correctMulti.includes('E') && (!p.E || String(p.E).trim() === '')) {
         throw new Error('Opsi E ditandai benar, tetapi kosong')
       }
-    
+
       optionsPayload = [
         { id: byLabel.A, label: 'A', text: String(p.A), isCorrect: correctMulti.includes('A') },
         { id: byLabel.B, label: 'B', text: String(p.B), isCorrect: correctMulti.includes('B') },
@@ -477,8 +481,8 @@ export default async function EditPackagePage(
         optionsPayload.push({ id: byLabel.E, label: 'E', text: String(p.E), isCorrect: correctMulti.includes('E') })
       }
     }
-    
-    
+
+
 
     if (type === 'TRUE_FALSE') {
       const tTrue = (p.tfTrueText ?? 'Benar').toString()
@@ -487,7 +491,7 @@ export default async function EditPackagePage(
       const optA = q.options.find((o: OptionRow) => o.label === 'A')
       const optB = q.options.find((o: OptionRow) => o.label === 'B')
       optionsPayload = [
-        { id: optA?.id, label: 'A', text: tTrue,  isCorrect: p.correctTF === 'TRUE' },
+        { id: optA?.id, label: 'A', text: tTrue, isCorrect: p.correctTF === 'TRUE' },
         { id: optB?.id, label: 'B', text: tFalse, isCorrect: p.correctTF === 'FALSE' },
       ]
     }
@@ -547,33 +551,33 @@ export default async function EditPackagePage(
     await prisma.question.delete({ where: { id: qid } })
     revalidatePath(`/admin/packages/${id}`)
   }
-  
-  // ===== PASSAGE: CREATE =====
-async function createPassage(formData: FormData) {
-  'use server'
-  const title = String(formData.get('title') ?? '').trim() || null
-  const content = String(formData.get('content') ?? '').trim()
-  if (!content || content.length < 10) throw new Error('Isi passage minimal 10 karakter')
-  await prisma.passage.create({
-    data: { examPackageId: id, title, content },
-  })
-  revalidatePath(`/admin/packages/${id}`)
-}
 
-// ===== PASSAGE: UPDATE =====
-async function updatePassage(formData: FormData) {
-  'use server'
-  const pid = String(formData.get('id') ?? '')
-  if (!pid) throw new Error('ID passage kosong')
-  const title = String(formData.get('title') ?? '').trim() || null
-  const content = String(formData.get('content') ?? '').trim()
-  if (!content || content.length < 10) throw new Error('Isi passage minimal 10 karakter')
-  await prisma.passage.update({
-    where: { id: pid },
-    data: { title, content },
-  })
-  revalidatePath(`/admin/packages/${id}`)
-}
+  // ===== PASSAGE: CREATE =====
+  async function createPassage(formData: FormData) {
+    'use server'
+    const title = String(formData.get('title') ?? '').trim() || null
+    const content = String(formData.get('content') ?? '').trim()
+    if (!content || content.length < 10) throw new Error('Isi passage minimal 10 karakter')
+    await prisma.passage.create({
+      data: { examPackageId: id, title, content },
+    })
+    revalidatePath(`/admin/packages/${id}`)
+  }
+
+  // ===== PASSAGE: UPDATE =====
+  async function updatePassage(formData: FormData) {
+    'use server'
+    const pid = String(formData.get('id') ?? '')
+    if (!pid) throw new Error('ID passage kosong')
+    const title = String(formData.get('title') ?? '').trim() || null
+    const content = String(formData.get('content') ?? '').trim()
+    if (!content || content.length < 10) throw new Error('Isi passage minimal 10 karakter')
+    await prisma.passage.update({
+      where: { id: pid },
+      data: { title, content },
+    })
+    revalidatePath(`/admin/packages/${id}`)
+  }
 
   async function deletePassage(formData: FormData) {
     'use server'
@@ -588,7 +592,7 @@ async function updatePassage(formData: FormData) {
     where: { examPackageId: id },
     orderBy: { createdAt: 'asc' },
   })
-  
+
   const questions = await prisma.question.findMany({
     where: { examPackageId: id },
     include: { options: true, passage: { select: { id: true, title: true } } }, // NEW
@@ -598,7 +602,7 @@ async function updatePassage(formData: FormData) {
     order: number
     text: string
     imageUrl: string | null
-    type: 'SINGLE_CHOICE'|'MULTI_SELECT'|'TRUE_FALSE'|'SHORT_TEXT'|'ESSAY'|'NUMBER'|'RANGE'
+    type: 'SINGLE_CHOICE' | 'MULTI_SELECT' | 'TRUE_FALSE' | 'SHORT_TEXT' | 'ESSAY' | 'NUMBER' | 'RANGE'
     points: number
     required: boolean
     settings: any | null
@@ -606,872 +610,469 @@ async function updatePassage(formData: FormData) {
     passage: { id: string; title: string | null } | null // NEW
     options: Array<{ id: string; label: string; text: string; isCorrect: boolean }>
   }>
-  
-  
+
+
 
   // UI helpers
   const inputCls =
-    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30'
+    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
   const fileCls =
-    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2.5 file:text-white'
-  const cardCls = 'rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200'
+    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2.5 file:text-white file:font-semibold hover:file:bg-indigo-700'
+  const cardCls = 'rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200'
 
   return (
-    <main className="min-h-screen bg-neutral-50">
+    <main className="min-h-screen bg-slate-50 pb-20">
       <section className="mx-auto max-w-6xl space-y-8 px-6 py-8">
         {/* Header */}
-        <a
-            href="/admin/packages"
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            Kembali ke Daftar Paket
-          </a>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-            Kelola Soal — {pkg.title}
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Tambah, edit, dan hapus soal untuk paket ini.
-          </p>
-        </div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <Link
+              href="/admin/packages"
+              className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors mb-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Kembali ke Daftar Paket
+            </Link>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                Kelola Soal: {pkg.title}
+              </h1>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">
+                {questions.length} Soal
+              </span>
+            </div>
 
-        <a
-    href={`/admin/packages/${id}/results`}
-    className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-  >
-    Lihat Hasil
-  </a>
-        
-{/* === PASSAGE SECTION (Pindah ke sini, sebelum ADD QUESTION) === */}
-<section className={cardCls}>
-  <h2 className="text-lg font-semibold text-gray-900">Reading (Passage)</h2>
-  <p className="mt-1 text-sm text-gray-600">
-    Buat passage/story panjang, lalu tautkan ke beberapa soal.
-  </p>
+            <p className="text-sm text-slate-600">
+              Tambah, edit, dan hapus soal untuk paket ini.
+            </p>
+          </div>
 
-  <details className="group mt-3">
-    <summary className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 group-open:bg-emerald-600 group-open:text-white group-open:border-emerald-600 cursor-pointer">
-      <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-      <span className="group-open:hidden">Tambah Passage</span>
-      <span className="hidden group-open:inline">Tutup</span>
-    </summary>
-
-    <form action={createPassage} className="mt-3 grid gap-3">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Judul (opsional)</label>
-        <input name="title" placeholder="mis. Reading 1" className={inputCls} />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Isi Passage</label>
-        <textarea name="content" rows={6} placeholder="Tempel cerita/artikel di sini…" className={inputCls} />
-        <p className="mt-1 text-xs text-gray-500">Markdown/plain text; minimal 10 karakter.</p>
-      </div>
-      <div>
-        <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
-          Simpan Passage
-        </button>
-      </div>
-    </form>
-  </details>
-
-  <div className="mt-5 divide-y rounded-xl border">
-    {passages.length === 0 && (
-      <div className="p-4 text-sm text-gray-500">Belum ada passage.</div>
-    )}
-    {passages.map(p => (
-      <div key={p.id} className="grid gap-3 p-4 md:grid-cols-12 md:items-start">
-        <div className="md:col-span-8">
-          <div className="font-medium text-gray-900">{p.title ?? '(Tanpa judul)'}</div>
-          <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-gray-700">{(p as any).content}</div>
-        </div>
-        <div className="md:col-span-4 md:text-right">
-          <form action={updatePassage} className="mb-2 space-y-2">
-            <input type="hidden" name="id" value={p.id} />
-            <input name="title" defaultValue={p.title ?? ''} className={inputCls} placeholder="Judul (opsional)" />
-            <textarea name="content" defaultValue={(p as any).content ?? ''} rows={3} className={inputCls} />
-            <button className="rounded-lg border px-3 py-1.5 text-sm">Update</button>
-          </form>
-          <form action={deletePassage}>
-            <input type="hidden" name="id" value={p.id} />
-            <button className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">
-              Hapus
-            </button>
-          </form>
-        </div>
-      </div>
-    ))}
-  </div>
-</section>
-        {/* CREATE (collapsed by default) */}
-<details className="group mt-2 add-q">
-  {/* Tombol buka/tutup */}
-  <summary
-    className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition
-               hover:border-blue-400 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50
-               group-open:bg-blue-600 group-open:text-white group-open:border-blue-600 select-none cursor-pointer"
-    role="button"
-  >
-    {/* ikon plus → chevron saat open */}
-    <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden="true">
-      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-    <span className="group-open:hidden">Tambah Soal</span>
-    <span className="hidden group-open:inline">Tutup Form Tambah</span>
-  </summary>
-
-  {/* Kartu/form tambah soal muncul saat dibuka */}
-  <form action={addQuestion} className={`${cardCls} form-add mt-3`} noValidate>
-    <h2 className="text-lg font-semibold text-gray-900">Tambah Soal</h2>
-
-    {/* Pilih tipe soal (Dropdown) + deskripsi dinamis */}
-    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-      <div>
-        <label htmlFor="type" className="mb-1 block text-sm font-medium text-gray-800">
-          Tipe Soal
-        </label>
-        <select id="type" name="type" defaultValue="SINGLE_CHOICE" className={inputCls}>
-          <option value="SINGLE_CHOICE">Single Choice</option>
-          <option value="MULTI_SELECT">Multi Select</option>
-          <option value="TRUE_FALSE">True / False</option>
-          <option value="NUMBER">Number</option>
-          <option value="RANGE">Range</option>
-          <option value="SHORT_TEXT">Short Text</option>
-          <option value="ESSAY">Essay</option>
-        </select>
-        
-        {/* Deskripsi per tipe (dinamis) */}
-        <div className="mt-2 space-y-2 text-xs">
-          <div className="tip tip-single rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-            <b>Single Choice:</b> Satu jawaban benar. Isi opsi A–D, lalu pilih 1 yang benar.
-          </div>
-          <div className="tip tip-multi rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-            <b>Multi Select:</b> Bisa lebih dari satu jawaban benar. Isi A–D, centang yang benar.
-          </div>
-          <div className="tip tip-tf rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-            <b>True/False:</b> Dua pilihan (Benar/Salah). Pilih salah satunya. Label bisa diubah.
-          </div>
-          <div className="tip tip-number rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-            <b>Number:</b> Jawaban angka. <i>Target</i> = nilai benar, <i>Tolerance</i> = selisih yang masih benar.
-          </div>
-          <div className="tip tip-range rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-            <b>Range:</b> Input angka dalam rentang <i>min</i>–<i>max</i> (step opsional).
-          </div>
-          <div className="tip tip-short rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-            <b>Short Text:</b> Isian singkat. Case sensitive & max length opsional.
-          </div>
-          <div className="tip tip-essay rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-            <b>Essay:</b> Jawaban panjang. Umumnya dinilai manual.
+          <div className="flex gap-2">
+            <Link
+              href={`/admin/packages/${id}/results`}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <LayoutList className="h-4 w-4" />
+              Lihat Hasil
+            </Link>
+            <Link
+              href={`/admin/packages/${id}/settings`}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <Edit2 className="h-4 w-4" />
+              Edit Paket
+            </Link>
           </div>
         </div>
-      </div>
 
-      <div>
-        <label htmlFor="order" className="mb-1 block text-sm font-medium text-gray-800">
-          Urutan (angka)
-        </label>
-        <input id="order" name="order" placeholder="mis. 1" className={inputCls} />
-      </div>
-
-      <div>
-        <label htmlFor="points" className="mb-1 block text-sm font-medium text-gray-800">Poin</label>
-        <input id="points" name="points" type="number" min={0} step={1} defaultValue={1} className={inputCls} />
-        <p className="mt-1 text-xs text-gray-500">Nilai yang diberikan jika jawaban benar.</p>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Wajib diisi?</label>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input id="required" name="required" type="checkbox" /> Required
-        </label>
-      </div>
-      
-      <div className="sm:col-span-2">
-        <label htmlFor="image" className="mb-1 block text-sm font-medium text-gray-800">Gambar (opsional)</label>
-        <input id="image" name="image" type="file" accept="image/*" className={fileCls} />
-        <p className="mt-1 text-xs text-gray-500">PNG/JPEG/WEBP, maks 2MB.</p>
-      </div>
-      
-{/* ⬇️ Tambahkan ini */}
-<div className="sm:col-span-2">
-  <label className="mb-1 block text-sm font-medium text-gray-800">
-    Tautkan ke Passage (opsional)
-  </label>
-  <select name="passageId" defaultValue="" className={inputCls}>
-  <option value="">— Tidak ditautkan —</option>
-  {passages.map(p => (
-    <option key={`passopt-${p.id}`} value={p.id}>
-      {p.title ?? 'Tanpa judul'}
-    </option>
-  ))}
-</select>
-  <p className="mt-1 text-xs text-gray-500">
-    Soal akan tampil di bawah passage tersebut pada tampilan peserta.
-  </p>
-</div>
-{/* ⬆️ Sampai sini */}
-
-      <div className="sm:col-span-2">
-        <label htmlFor="text" className="mb-1 block text-sm font-medium text-gray-800">Teks soal</label>
-        <textarea id="text" name="text" placeholder="Tuliskan pertanyaan di sini…" rows={3} className={inputCls} />
-      </div>
-    </div>
-
-    <div className="sm:col-span-2">
-  <label htmlFor="contextText" className="mb-1 block text-sm font-medium text-gray-800">
-    Teks pendukung (opsional)
-  </label>
-  <textarea id="contextText" name="contextText" placeholder="Paragraf/penjelasan singkat sebelum pertanyaan…" rows={3} className={inputCls} />
-  <p className="mt-1 text-xs text-gray-500">Contoh: mini-passage, deskripsi studi kasus, atau tabel ringkas.</p>
-</div>
+        {/* === PASSAGE SECTION === */}
+        <section className={cardCls}>
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Passage / Reading Section</h2>
+              <p className="text-xs text-slate-500">Buat teks bacaan panjang yang dapat digunakan untuk referensi soal.</p>
+            </div>
+          </div>
 
 
-    {/* ====== OPSI A–D (Single/Multi) ====== */}
-    <div className="section section-single section-multi mt-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-      {(['A','B','C','D','E'] as const).map(L => (
-  <div key={L}>
-    <label className="mb-1 block text-sm font-medium text-gray-800">Opsi {L}{L==='E' ? ' (opsional)' : ''}</label>
-    <input name={L} placeholder={`Opsi ${L}`} className={inputCls} />
-  </div>
-))}
+          <details className="group mt-3">
+            <summary className="inline-flex items-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 hover:border-indigo-400 cursor-pointer w-full justify-center sm:w-auto">
+              <Plus className="h-4 w-4 transition-transform group-open:rotate-45" />
+              <span className="group-open:hidden">Tambah Passage Baru</span>
+              <span className="hidden group-open:inline">Batal / Tutup Form</span>
+            </summary>
 
-      </div>
+            <div className="mt-4 p-4 border border-indigo-100 rounded-xl bg-indigo-50/30">
+              <h3 className="text-sm font-semibold text-indigo-900 mb-3">Buat Passage Baru</h3>
+              <form action={createPassage} className="grid gap-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Judul (opsional)</label>
+                  <input name="title" placeholder="Contoh: Bacaan tentang Sejarah Komputer" className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Isi Passage</label>
+                  <textarea name="content" rows={6} placeholder="Tempel teks bacaan di sini..." className={inputCls} />
+                  <p className="mt-1 text-xs text-slate-500">Markdown didukung. Minimal 10 karakter.</p>
+                </div>
+                <div>
+                  <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm">
+                    <Save className="h-4 w-4" />
+                    Simpan Passage
+                  </button>
+                </div>
+              </form>
+            </div>
+          </details>
 
-      {/* Single Choice: pilih 1 benar */}
-      <div className="mt-3 section section-single">
-        <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Single Choice)</label>
-        <select name="correctLabel" className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-          <option value="">—</option>
-          <option value="A">A</option><option value="B">B</option>
-          <option value="C">C</option><option value="D">D</option><option value="E">E</option>
-        </select>
-      </div>
-
-      {/* Multi Select: bisa >1 benar */}
-      <div className="mt-3 section section-multi">
-        <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Multi Select)</label>
-        <div className="flex gap-4 text-sm">
-        {(['A','B','C','D','E'] as const).map(L => (
-  <label key={`cm-${L}`} className="inline-flex items-center gap-2">
-    <input type="checkbox" name="correctMulti" value={L} /> {L}
-  </label>
-))}
-
-        </div>
-      </div>
-    </div>
-
-    {/* ====== TRUE / FALSE ====== */}
-    <div className="section section-tf mt-4 grid gap-3 sm:grid-cols-2">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Teks untuk TRUE</label>
-        <input name="tfTrueText" defaultValue="Benar" className={inputCls} />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Teks untuk FALSE</label>
-        <input name="tfFalseText" defaultValue="Salah" className={inputCls} />
-      </div>
-      <div className="sm:col-span-2">
-        <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (True/False)</label>
-        <div className="flex gap-6 text-sm">
-          <label className="inline-flex items-center gap-2"><input type="radio" name="correctTF" value="TRUE" /> TRUE</label>
-          <label className="inline-flex items-center gap-2"><input type="radio" name="correctTF" value="FALSE" /> FALSE</label>
-        </div>
-      </div>
-    </div>
-
-    {/* ====== NUMBER ====== */}
-    <div className="section section-number mt-4 grid gap-3 sm:grid-cols-3">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Target (Number)</label>
-        <input name="targetNumber" type="number" step="any" placeholder="mis. 42" className={inputCls} />
-        <p className="mt-1 text-xs text-gray-500">Nilai benar (boleh desimal).</p>
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Tolerance (Number)</label>
-        <input name="tolerance" type="number" step="any" placeholder="mis. 0.5" className={inputCls} />
-        <p className="mt-1 text-xs text-gray-500">Selisih yang masih dianggap benar (≥ 0).</p>
-      </div>
-    </div>
-
-    {/* ====== RANGE ====== */}
-    <div className="section section-range mt-4 grid gap-3 sm:grid-cols-3">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Min (Range)</label>
-        <input name="min" type="number" step="any" className={inputCls} />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Max (Range)</label>
-        <input name="max" type="number" step="any" className={inputCls} />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Step (Range)</label>
-        <input name="step" type="number" step="any" placeholder="opsional" className={inputCls} />
-        <p className="mt-1 text-xs text-gray-500">Besaran kenaikan slider (opsional).</p>
-      </div>
-    </div>
-
-    {/* ====== SHORT / ESSAY ====== */}
-    <div className="section section-short section-essay mt-4 grid gap-3 sm:grid-cols-3">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Case sensitive</label>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input type="checkbox" name="caseSensitive" /> Aktifkan
-        </label>
-        <p className="mt-1 text-xs text-gray-500">Perhatikan huruf besar/kecil saat evaluasi.</p>
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Max length</label>
-        <input name="maxLength" type="number" step={1} min={1} placeholder="opsional" className={inputCls} />
-        <p className="mt-1 text-xs text-gray-500">Batas karakter jawaban (opsional).</p>
-      </div>
-    </div>
-
-    <div className="pt-4">
-      <button className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-        Simpan Soal
-      </button>
-    </div>
-
-    {/* ====== CSS toggle per tipe (dropdown) ====== */}
-    <style>{`
-      /* Fallback: kalau :has tidak didukung, tampilkan semua agar nggak 'kosong' */
-      .form-add .section { display: block; }
-      .form-add .tip { display: block; }
-
-      @supports selector(:has(*)) {
-        /* Sembunyikan semua dulu */
-        .form-add .section { display: none; }
-        .form-add .tip { display: none; }
-
-        /* Default state (kalau belum ada pilihan) -> Single Choice */
-        .form-add:not(:has(select[name="type"] option:checked)) .section-single,
-        .form-add:not(:has(select[name="type"] option:checked)) .tip-single { display: block; }
-
-        /* Tampilkan sesuai option yang sedang dipilih */
-        .form-add:has(select[name="type"] option[value="SINGLE_CHOICE"]:checked) .section-single { display: block; }
-        .form-add:has(select[name="type"] option[value="SINGLE_CHOICE"]:checked) .tip-single { display: block; }
-
-        .form-add:has(select[name="type"] option[value="MULTI_SELECT"]:checked) .section-multi { display: block; }
-        .form-add:has(select[name="type"] option[value="MULTI_SELECT"]:checked) .tip-multi { display: block; }
-
-        .form-add:has(select[name="type"] option[value="TRUE_FALSE"]:checked) .section-tf { display: grid; }
-        .form-add:has(select[name="type"] option[value="TRUE_FALSE"]:checked) .tip-tf { display: block; }
-
-        .form-add:has(select[name="type"] option[value="NUMBER"]:checked) .section-number { display: grid; }
-        .form-add:has(select[name="type"] option[value="NUMBER"]:checked) .tip-number { display: block; }
-
-        .form-add:has(select[name="type"] option[value="RANGE"]:checked) .section-range { display: grid; }
-        .form-add:has(select[name="type"] option[value="RANGE"]:checked) .tip-range { display: block; }
-
-        .form-add:has(select[name="type"] option[value="SHORT_TEXT"]:checked) .section-short { display: grid; }
-        .form-add:has(select[name="type"] option[value="SHORT_TEXT"]:checked) .tip-short { display: block; }
-
-        .form-add:has(select[name="type"] option[value="ESSAY"]:checked) .section-essay { display: grid; }
-        .form-add:has(select[name="type"] option[value="ESSAY"]:checked) .tip-essay { display: block; }
-
-        /* Shared block (SHORT_TEXT & ESSAY) */
-        .form-add:has(select[name="type"] option[value="SHORT_TEXT"]:checked) .section-short.section-essay { display: grid; }
-        .form-add:has(select[name="type"] option[value="ESSAY"]:checked) .section-short.section-essay { display: grid; }
-      }
-    `}</style>
-  </form>
-</details>
-
-{/* Sembunyikan marker default summary → beneran berasa tombol */}
-<style>{`
-  details.add-q > summary { list-style: none; }
-  details.add-q > summary::-webkit-details-marker { display: none; }
-`}</style>
-
-        {/* LIST + EDIT/DELETE */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">Daftar Soal</h2>
-
-          <ol className="space-y-4">
-            {questions.map((q) => {
-              const correctIds = new Set(q.options.filter(o => o.isCorrect).map(o => o.id))
-              return (
-                <li key={q.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 font-bold text-white">
-                        {q.order}
-                      </span>
-                      <div className="font-semibold text-gray-900">Soal #{q.order}</div>
-                      <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs text-violet-700">
-                        {q.type.replace(/_/g, ' ')}
-                      </span>
-                      <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                        {q.points} poin {q.required ? '• wajib' : ''}
-                      </span>
+          <div className="mt-6 space-y-4">
+            {passages.length === 0 && (
+              <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center">
+                <p className="text-sm text-slate-500">Belum ada passage yang dibuat.</p>
+              </div>
+            )}
+            {passages.map(p => (
+              <div key={p.id} className="group relative rounded-xl border border-slate-200 bg-slate-50/50 p-4 transition-all hover:bg-white hover:shadow-md">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-6 w-6 items-center justify-center rounded bg-indigo-100 text-xs font-bold text-indigo-700">
+                        P
+                      </div>
+                      <span className="font-semibold text-slate-900">{p.title ?? '(Tanpa Judul)'}</span>
                     </div>
-                    <form>
-                      <input type="hidden" name="id" value={q.id} />
-                      <button
-                        formAction={deleteQuestion}
-                        className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
-                      >
-                        Hapus
-                      </button>
-                    </form>
+                    <div className="line-clamp-3 whitespace-pre-wrap text-sm text-slate-600 font-mono bg-white p-3 rounded border border-slate-200 text-xs">{(p as any).content}</div>
                   </div>
 
-                  <div className="mt-2 leading-relaxed text-gray-800">{q.text}</div>
+                  <div className="flex gap-2 self-start md:self-center">
+                    <details className="relative">
+                      <summary className="list-none">
+                        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
+                          <Edit2 className="h-3 w-3" /> Edit
+                        </div>
+                      </summary>
+                      <div className="absolute right-0 z-10 mt-2 w-[400px] max-w-[90vw] rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                        <h4 className="font-semibold text-slate-900 mb-3">Edit Passage</h4>
+                        <form action={updatePassage} className="space-y-3">
+                          <input type="hidden" name="id" value={p.id} />
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-600">Judul</label>
+                            <input name="title" defaultValue={p.title ?? ''} className={inputCls} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-600">Konten</label>
+                            <textarea name="content" defaultValue={(p as any).content ?? ''} rows={5} className={inputCls} />
+                          </div>
+                          <div className="flex justify-end pt-2">
+                            <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700">Update</button>
+                          </div>
+                        </form>
+                      </div>
+                    </details>
 
-                  {(q as any).contextText && (
-  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-    {(q as any).contextText}
-  </div>
-)}
+                    <ConfirmDeleteForm action={deletePassage} id={p.id} confirmationMessage="Hapus passage ini? Soal terkait akan kehilangan referensi.">
+                      <button className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                        <Trash2 className="h-3 w-3" /> Hapus
+                      </button>
+                    </ConfirmDeleteForm>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
+        {/* CREATE QUESTION SECTION */}
+        <div id="create-question">
+          <details className="group add-q" open={questions.length === 0}>
+            <summary className="flex items-center justify-between w-full p-4 rounded-xl bg-indigo-600 text-white shadow-md cursor-pointer hover:bg-indigo-700 transition list-none">
+              <div className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                <span className="font-semibold">Tambah Soal Baru</span>
+              </div>
+              <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
+            </summary>
 
-                  {q.imageUrl && (
-                    <img
-                      src={q.imageUrl}
-                      alt="gambar soal"
-                      className="mt-3 max-h-64 rounded-xl border border-gray-200 object-contain"
-                    />
-                  )}
-
-                  {q.options.length > 0 && (
-                    <ul className="mt-3 grid gap-2 text-sm md:grid-cols-2">
-                      {q.options.map((o) => (
-                        <li
-                          key={o.id}
-                          className={`rounded-lg border px-3 py-2 ${
-                            correctIds.has(o.id)
-                              ? 'border-green-300 bg-green-50 font-semibold'
-                              : 'border-gray-200 bg-gray-50'
-                          }`}
-                        >
-                          {o.label}. {o.text}
-                        </li>
+            <div className="mt-4 p-6 rounded-xl bg-white border border-slate-200 shadow-sm">
+              <form action={addQuestion} className="space-y-6" noValidate>
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {/* Type Selection */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Tipe Soal</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { v: 'SINGLE_CHOICE', l: 'Pilihan Ganda' },
+                        { v: 'MULTI_SELECT', l: 'Pilihan Ganda Kompleks' },
+                        { v: 'TRUE_FALSE', l: 'Benar / Salah' },
+                        { v: 'SHORT_TEXT', l: 'Isian Singkat' },
+                        { v: 'ESSAY', l: 'Uraian' },
+                        { v: 'NUMBER', l: 'Angka' },
+                        { v: 'RANGE', l: 'Skala / Range' } // Fixed label
+                      ].map(opt => (
+                        <label key={opt.v} className="cursor-pointer relative">
+                          <input type="radio" name="type" value={opt.v} className="peer sr-only" defaultChecked={opt.v === 'SINGLE_CHOICE'} />
+                          <div className="rounded-lg border border-slate-200 p-3 text-center text-sm font-medium text-slate-600 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:text-indigo-700 hover:border-indigo-300">
+                            {opt.l}
+                          </div>
+                        </label>
                       ))}
-                    </ul>
-                  )}
-
-                  {q.settings && (
-                    <div className="mt-2 text-xs text-gray-600">
-                      <code className="rounded bg-gray-100 px-2 py-1">{JSON.stringify(q.settings)}</code>
                     </div>
-                  )}
+                  </div>
 
-                  {/* EDIT */}
-                  <details className="group mt-3">
-                  <summary
-  className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 transition
-             hover:border-blue-400 hover:bg-blue-100
-             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50
-             group-open:bg-blue-600 group-open:text-white group-open:border-blue-600 select-none cursor-pointer"
-  role="button"
->
-  {/* ikon chevron */}
-  <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden="true">
-    <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
+                  {/* Basic Info */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Urutan</label>
+                    <input name="order" placeholder="Otomatis (akhir)" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Poin / Bobot</label>
+                    <input name="points" type="number" min={0} defaultValue={1} className={inputCls} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                      <input name="required" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" />
+                      <span className="text-sm font-medium text-slate-700">Wajib Diisi (Siswa harus menjawab)</span>
+                    </label>
+                  </div>
 
-  {/* label berubah saat dibuka/ditutup */}
-  <span className="group-open:hidden">Edit soal ini</span>
-  <span className="hidden group-open:inline">Tutup edit</span>
-</summary>
+                  {/* Content */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Pertanyaan</label>
+                    <textarea name="text" rows={3} className={inputCls} placeholder="Tulis pertanyaan di sini (Markdown didukung)..." required />
+                  </div>
 
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Gambar (opsional)</label>
+                    <input name="image" type="file" accept="image/*" className={fileCls} />
+                  </div>
 
-                    <form action={updateQuestion} className="mt-3 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 form-edit" noValidate>
-  <input type="hidden" name="id" value={q.id} />
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Passage Referensi (opsional)</label>
+                    <select name="passageId" className={inputCls}>
+                      <option value="">— Tidak menggunakan passage —</option>
+                      {passages.map(p => (
+                        <option key={p.id} value={p.id}>{p.title || '(Tanpa Judul)'} - {p.id.slice(0, 8)}...</option>
+                      ))}
+                    </select>
+                  </div>
 
-  <div className="grid gap-3 sm:grid-cols-2">
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Urutan</label>
-      <input name="order" defaultValue={q.order} className={inputCls} />
-    </div>
+                  {/* OPTIONS SECTION AREA - Styled based on selection logic handled by JS ideally, but here CSS/Details */}
+                  <div className="sm:col-span-2 border-t border-slate-100 pt-6">
+                    <h4 className="font-semibold text-slate-900 mb-4">Opsi Jawaban & Kunci</h4>
 
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Tipe Soal</label>
-      <select name="type" defaultValue={q.type} className={inputCls}>
-        <option value="SINGLE_CHOICE">Single Choice</option>
-        <option value="MULTI_SELECT">Multi Select</option>
-        <option value="TRUE_FALSE">True / False</option>
-        <option value="SHORT_TEXT">Short Text</option>
-        <option value="ESSAY">Essay</option>
-        <option value="NUMBER">Number</option>
-        <option value="RANGE">Range</option>
-      </select>
+                    <div className="space-y-6">
+                      {/* Multiple Choice Blocks */}
+                      <div className="grid gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Untuk Pilihan Ganda / Kompleks</p>
+                        {['A', 'B', 'C', 'D', 'E'].map(label => (
+                          <div key={label} className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white border border-slate-300 font-bold text-slate-600 shadow-sm">
+                              {label}
+                            </div>
+                            <div className="flex-1 space-y-2">
+                              <input name={label} placeholder={`Pilihan ${label}`} className={inputCls} />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer" title="Benar untuk Single Choice">
+                                <input type="radio" name="correctLabel" value={label} className="text-indigo-600 focus:ring-indigo-600" />
+                                <span>Kunci (Satu)</span>
+                              </label>
+                              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer" title="Benar untuk Multi Select">
+                                <input type="checkbox" name="correctMulti" value={label} className="rounded text-indigo-600 focus:ring-indigo-600" />
+                                <span>Kunci (Multi)</span>
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-      {/* Deskripsi per tipe (dinamis) */}
-      <div className="mt-2 space-y-2 text-xs">
-        <div className="tip tip-single rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-          <b>Single Choice:</b> Satu jawaban benar. Isi opsi A–D, lalu pilih 1 yang benar.
+                      {/* True False */}
+                      <div className="grid sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <p className="sm:col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Untuk True / False</p>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Label Benar</label>
+                          <input name="tfTrueText" defaultValue="Benar" className={inputCls} />
+                          <label className="mt-2 flex items-center gap-2">
+                            <input type="radio" name="correctTF" value="TRUE" className="text-indigo-600" />
+                            <span className="text-sm font-medium">Ini Jawaban Benar</span>
+                          </label>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Label Salah</label>
+                          <input name="tfFalseText" defaultValue="Salah" className={inputCls} />
+                          <label className="mt-2 flex items-center gap-2">
+                            <input type="radio" name="correctTF" value="FALSE" className="text-indigo-600" />
+                            <span className="text-sm font-medium">Ini Jawaban Benar</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Numeric / Range */}
+                      <div className="grid sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <p className="sm:col-span-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Untuk Angka, Range, & Text</p>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Target Angka</label>
+                          <input name="targetNumber" type="number" step="any" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Toleransi (+/-)</label>
+                          <input name="tolerance" type="number" step="any" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Min (Range)</label>
+                          <input name="min" type="number" step="any" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Max (Range)</label>
+                          <input name="max" type="number" step="any" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Step (Range)</label>
+                          <input name="step" type="number" step="any" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Max Length (Text)</label>
+                          <input name="maxLength" type="number" className={inputCls} />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <label className="flex items-center gap-2">
+                            <input type="checkbox" name="caseSensitive" className="rounded text-indigo-600" />
+                            <span className="text-sm text-slate-700">Case Sensitive (Huruf Besar/Kecil berpengaruh)</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                  <button className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98]">
+                    <Plus className="h-5 w-5" />
+                    Tambahkan Soal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </details>
         </div>
-        <div className="tip tip-multi rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-          <b>Multi Select:</b> Bisa lebih dari satu jawaban benar. Isi A–D, centang yang benar.
-        </div>
-        <div className="tip tip-tf rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-          <b>True/False:</b> Dua pilihan (Benar/Salah). Pilih salah satunya. Label bisa diubah.
-        </div>
-        <div className="tip tip-number rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-          <b>Number:</b> Jawaban angka. <i>Target</i> = nilai benar, <i>Tolerance</i> = selisih yang masih benar.
-        </div>
-        <div className="tip tip-range rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-          <b>Range:</b> Input angka dalam rentang <i>min</i>–<i>max</i> (step opsional).
-        </div>
-        <div className="tip tip-short rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-          <b>Short Text:</b> Isian singkat. Case sensitive & max length opsional.
-        </div>
-        <div className="tip tip-essay rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-800">
-          <b>Essay:</b> Jawaban panjang. Umumnya dinilai manual.
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Poin</label>
-      <input name="points" type="number" min={0} step={1} defaultValue={q.points} className={inputCls} />
-    </div>
-
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Wajib diisi?</label>
-      <label className="inline-flex items-center gap-2 text-sm">
-        <input type="checkbox" name="required" defaultChecked={q.required} /> Required
-      </label>
-    </div>
-
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Gambar (opsional)</label>
-      <input name="image" type="file" accept="image/*" className={fileCls} />
-    </div>
-
-    <div className="sm:col-span-2">
-  <label className="mb-1 block text-sm font-medium text-gray-800">
-    Tautkan ke Passage (opsional)
-  </label>
-  <select name="passageId" defaultValue={q.passage?.id ?? ''} className={inputCls}>
-    <option value="">— Tidak ditautkan —</option>
-    {passages.map(p => (
-      <option key={`passopt-${q.id}-${p.id}`} value={p.id}>
-        {p.title ?? 'Tanpa judul'}
-      </option>
-    ))}
-  </select>
-</div>
-
-    <div className="sm:col-span-2">
-      <label className="mb-1 block text-sm font-medium text-gray-800">Teks soal</label>
-      <textarea name="text" defaultValue={q.text} rows={3} className={inputCls} />
-    </div>
-  </div>
-
-  <div className="sm:col-span-2">
-  <label className="mb-1 block text-sm font-medium text-gray-800">Teks pendukung (opsional)</label>
-  <textarea name="contextText" defaultValue={(q as any).contextText ?? ''} rows={3} className={inputCls} />
-  <p className="mt-1 text-xs text-gray-500">Kosongkan untuk menghapus teks pendukung.</p>
-</div>
 
 
-  {/* ====== OPSI A–D (Single/Multi) ====== */}
-  <div className="section section-single section-multi grid gap-3 sm:grid-cols-2">
-  {(['A','B','C','D','E'] as const).map(L => (
-  <div key={`edit-${q.id}-${L}`}>
-    <label className="mb-1 block text-sm font-medium text-gray-800">Opsi {L}{L==='E' ? ' (opsional)' : ''}</label>
-    <input
-      name={L}
-      defaultValue={q.options.find((o) => o.label === L)?.text ?? ''}
-      className={inputCls}
-    />
-  </div>
-))}
+        {/* QUESTIONS LIST */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+            <CheckSquare className="h-5 w-5 text-slate-500" />
+            <h3 className="text-lg font-bold text-slate-900">Daftar Soal</h3>
+          </div>
 
+          {questions.length === 0 && (
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
+              <div className="rounded-full bg-indigo-50 p-4 mb-4">
+                <FileText className="h-8 w-8 text-indigo-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900">Belum ada soal</h3>
+              <p className="mt-1 text-sm text-slate-500 max-w-xs mx-auto">Mulai tambahkan soal pertama Anda menggunakan formulir di atas.</p>
+            </div>
+          )}
 
-    {/* Single Choice: pilih 1 benar */}
-    <div className="sm:col-span-2 section section-single">
-      <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Single Choice)</label>
-      <select
-        name="correctLabel"
-        defaultValue={q.options.find(o => o.isCorrect)?.label ?? ''}
-        className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-      >
-        <option value="">—</option>
-        <option value="A">A</option><option value="B">B</option>
-        <option value="C">C</option><option value="D">D</option><option value="E">E</option>
-      </select>
-    </div>
+          <div className="grid gap-6">
+            {questions.map((q) => (
+              <div key={q.id} className="group relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:border-indigo-200">
+                <div className="absolute right-4 top-4 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  <details className="relative">
+                    <summary className="list-none">
+                      <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-indigo-600 hover:border-indigo-200 cursor-pointer">
+                        <Edit2 className="h-4 w-4" />
+                      </div>
+                    </summary>
+                    {/* Edit Form Popup (Simplified for brevity, could be modal) */}
+                    <div className="absolute right-0 z-20 mt-2 w-[600px] max-w-[90vw] rounded-xl border border-slate-200 bg-white p-6 shadow-xl ring-1 ring-black/5">
+                      <h4 className="font-bold text-slate-900 mb-4 border-b pb-2">Edit Soal #{q.order}</h4>
+                      <form action={updateQuestion} className="space-y-4">
+                        <input type="hidden" name="id" value={q.id} />
+                        <input type="hidden" name="type" value={q.type} />
 
-    {/* Multi Select: bisa >1 benar */}
-    <div className="sm:col-span-2 section section-multi">
-      <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (Multi Select)</label>
-      <div className="flex flex-wrap gap-4 text-sm">
-      {(['A','B','C','D','E'] as const).map(L => {
-  const isC = q.options.find(o => o.label === L)?.isCorrect ?? false
-  return (
-    <label key={`edit-cm-${q.id}-${L}`} className="inline-flex items-center gap-2">
-      <input type="checkbox" name="correctMulti" value={L} defaultChecked={isC} /> {L}
-    </label>
-  )
-})}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-semibold text-slate-500">Urutan</label>
+                            <input name="order" defaultValue={q.order} className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-slate-500">Poin</label>
+                            <input name="points" type="number" defaultValue={q.points} className={inputCls} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-slate-500">Pertanyaan</label>
+                          <textarea name="text" defaultValue={q.text} rows={3} className={inputCls} />
+                        </div>
 
-      </div>
-    </div>
-  </div>
+                        {/* Minimal field support for editing - fully supporting all fields in a small dropdown is hard, usually needs separate page or modal. Adding essentials here. */}
+                        <div className="p-3 bg-amber-50 rounded border border-amber-100 text-xs text-amber-800">
+                          <AlertCircle className="inline h-3 w-3 mr-1" />
+                          Fitur edit cepat terbatas. Hapus dan buat ulang jika ingin mengubah Tipe Soal secara drastis.
+                        </div>
 
-  {/* ====== TRUE / FALSE ====== */}
-  <div className="section section-tf grid gap-3 sm:grid-cols-2">
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Teks TRUE</label>
-      <input
-        name="tfTrueText"
-        defaultValue={q.options.find(o=>o.label==='A')?.text ?? 'Benar'}
-        className={inputCls}
-      />
-    </div>
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Teks FALSE</label>
-      <input
-        name="tfFalseText"
-        defaultValue={q.options.find(o=>o.label==='B')?.text ?? 'Salah'}
-        className={inputCls}
-      />
-    </div>
-    <div className="sm:col-span-2">
-      <label className="mb-1 block text-sm font-medium text-gray-800">Jawaban benar (True/False)</label>
-      <div className="flex gap-6 text-sm">
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="radio"
-            name="correctTF"
-            value="TRUE"
-            defaultChecked={q.options.find(o=>o.label==='A')?.isCorrect === true}
-          /> TRUE
-        </label>
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="radio"
-            name="correctTF"
-            value="FALSE"
-            defaultChecked={q.options.find(o=>o.label==='B')?.isCorrect === true}
-          /> FALSE
-        </label>
-      </div>
-    </div>
-  </div>
-
-  {/* ====== NUMBER ====== */}
-  <div className="section section-number grid gap-3 sm:grid-cols-3">
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Target (Number)</label>
-      <input name="targetNumber" type="number" step="any" defaultValue={q.settings?.target ?? ''} className={inputCls} />
-      <p className="mt-1 text-xs text-gray-500">Nilai benar (boleh desimal).</p>
-    </div>
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Tolerance (Number)</label>
-      <input name="tolerance" type="number" step="any" defaultValue={q.settings?.tolerance ?? ''} className={inputCls} />
-      <p className="mt-1 text-xs text-gray-500">Selisih yang masih dianggap benar (≥ 0).</p>
-    </div>
-  </div>
-
-  {/* ====== RANGE ====== */}
-  <div className="section section-range grid gap-3 sm:grid-cols-3">
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Min (Range)</label>
-      <input name="min" type="number" step="any" defaultValue={q.settings?.min ?? ''} className={inputCls} />
-    </div>
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Max (Range)</label>
-      <input name="max" type="number" step="any" defaultValue={q.settings?.max ?? ''} className={inputCls} />
-    </div>
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Step (Range)</label>
-      <input name="step" type="number" step="any" defaultValue={q.settings?.step ?? ''} className={inputCls} />
-      <p className="mt-1 text-xs text-gray-500">Besaran kenaikan slider (opsional).</p>
-    </div>
-  </div>
-
-  {/* ====== SHORT / ESSAY ====== */}
-  <div className="section section-short section-essay grid gap-3 sm:grid-cols-3">
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Case sensitive</label>
-      <label className="inline-flex items-center gap-2 text-sm">
-        <input type="checkbox" name="caseSensitive" defaultChecked={q.settings?.caseSensitive === true} /> Aktifkan
-      </label>
-      <p className="mt-1 text-xs text-gray-500">Perhatikan huruf besar/kecil saat evaluasi.</p>
-    </div>
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-800">Max length</label>
-      <input name="maxLength" type="number" step={1} min={1} defaultValue={q.settings?.maxLength ?? ''} className={inputCls} />
-      <p className="mt-1 text-xs text-gray-500">Batas karakter jawaban (opsional).</p>
-    </div>
-  </div>
-
-  <div className="pt-1">
-    <button className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-      Simpan Perubahan
-    </button>
-  </div>
-
-  {/* ====== CSS toggle per tipe (dropdown) ====== */}
-  <style>{`
-    /* Fallback: kalau :has tidak didukung, tampilkan semua agar tidak 'kosong' */
-    .form-edit .section { display: block; }
-    .form-edit .tip { display: block; }
-
-    @supports selector(:has(*)) {
-      /* Sembunyikan semua dulu */
-      .form-edit .section { display: none; }
-      .form-edit .tip { display: none; }
-
-      /* Tampilkan sesuai option yang dipilih pada select[name="type"] */
-      .form-edit:has(select[name="type"] option[value="SINGLE_CHOICE"]:checked) .section-single { display: grid; }
-      .form-edit:has(select[name="type"] option[value="SINGLE_CHOICE"]:checked) .tip-single { display: block; }
-
-      .form-edit:has(select[name="type"] option[value="MULTI_SELECT"]:checked) .section-multi { display: grid; }
-      .form-edit:has(select[name="type"] option[value="MULTI_SELECT"]:checked) .tip-multi { display: block; }
-
-      .form-edit:has(select[name="type"] option[value="TRUE_FALSE"]:checked) .section-tf { display: grid; }
-      .form-edit:has(select[name="type"] option[value="TRUE_FALSE"]:checked) .tip-tf { display: block; }
-
-      .form-edit:has(select[name="type"] option[value="NUMBER"]:checked) .section-number { display: grid; }
-      .form-edit:has(select[name="type"] option[value="NUMBER"]:checked) .tip-number { display: block; }
-
-      .form-edit:has(select[name="type"] option[value="RANGE"]:checked) .section-range { display: grid; }
-      .form-edit:has(select[name="type"] option[value="RANGE"]:checked) .tip-range { display: block; }
-
-      .form-edit:has(select[name="type"] option[value="SHORT_TEXT"]:checked) .section-short { display: grid; }
-      .form-edit:has(select[name="type"] option[value="SHORT_TEXT"]:checked) .tip-short { display: block; }
-
-      .form-edit:has(select[name="type"] option[value="ESSAY"]:checked) .section-essay { display: grid; }
-      .form-edit:has(select[name="type"] option[value="ESSAY"]:checked) .tip-essay { display: block; }
-
-      /* Shared block (SHORT_TEXT & ESSAY) */
-      .form-edit:has(select[name="type"] option[value="SHORT_TEXT"]:checked) .section-short.section-essay { display: grid; }
-      .form-edit:has(select[name="type"] option[value="ESSAY"]:checked) .section-short.section-essay { display: grid; }
-
-        /* Hilangkan marker default summary biar bener-bener mirip tombol */
-  details > summary { list-style: none; }
-  details > summary::-webkit-details-marker { display: none; }
-    }
-  `}</style>
-</form>
-
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Simpan Perubahan</button>
+                        </div>
+                      </form>
+                    </div>
                   </details>
-                </li>
-              )
-            })}
-          </ol>
+
+                  <ConfirmDeleteForm action={deleteQuestion} id={q.id} confirmationMessage="Hapus soal ini?">
+                    <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-500 shadow-sm hover:bg-red-50 hover:border-red-300">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </ConfirmDeleteForm>
+                </div>
+
+                <div className="flex items-start gap-4 pr-16">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-lg font-bold text-indigo-700">
+                    {q.order}
+                  </div>
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          {q.type.replace('_', ' ')}
+                        </span>
+                        {q.required && (
+                          <span className="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-600">
+                            Required
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-400">
+                          {q.points} Poin
+                        </span>
+                      </div>
+                      <p className="text-slate-900 font-medium whitespace-pre-wrap">{q.text}</p>
+                    </div>
+
+                    {q.imageUrl && (
+                      <div className="relative h-40 w-full max-w-sm overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={q.imageUrl} alt="Soal" className="h-full w-full object-contain" />
+                      </div>
+                    )}
+
+                    {q.passage && (
+                      <div className="inline-flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-1.5 text-xs text-indigo-700">
+                        <FileText className="h-3 w-3" />
+                        Referensi: {q.passage.title || 'Passage'}
+                      </div>
+                    )}
+
+                    {/* Options View */}
+                    {q.options.length > 0 && (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {q.options.map(opt => (
+                          <div key={opt.id} className={`flex items-start gap-2 rounded-lg border p-2 text-sm ${opt.isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-100 bg-white text-slate-600'}`}>
+                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs font-bold ${opt.isCorrect ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
+                              {opt.label}
+                            </span>
+                            <span>{opt.text}</span>
+                            {opt.isCorrect && <CheckSquare className="ml-auto h-4 w-4 text-emerald-500" />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Settings View for non-option types */}
+                    {q.settings && (
+                      <div className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600 font-mono border border-slate-200">
+                        {JSON.stringify(q.settings).replace(/["{}]/g, '').replace(/,/g, ', ')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+
       </section>
-
-      {/* Footer */}
-<footer className="mt-16 border-t border-gray-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:border-gray-800 dark:bg-gray-950/70">
-  <div className="mx-auto max-w-7xl px-6">
-    {/* Top: brand + nav columns */}
-    <div className="grid gap-10 py-12 md:grid-cols-4">
-      {/* Brand */}
-      <div className="md:col-span-1">
-        <a href="/" className="inline-flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
-            {/* Simple mark (graduation cap) */}
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-              <path fill="currentColor" d="M12 3 2 8l10 5 8-4.1V15h2V8L12 3zm-6 9.2V16c0 2.2 3.1 4 6 4s6-1.8 6-4v-3.8l-6 3-6-3z"/>
-            </svg>
-          </span>
-          <span className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            Simulasi Ujian
-          </span>
-        </a>
-        <p className="mt-4 text-sm leading-6 text-gray-600 dark:text-gray-400">
-          Platform simulasi ujian untuk siswa & institusi—stabil, aman, dan mudah digunakan.
-        </p>
-      </div>
-
-      {/* Columns */}
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Produk
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/features" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Fitur</a></li>
-          <li><a href="/pricing" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Harga</a></li>
-          <li><a href="/docs" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Dokumentasi</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Perusahaan
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/about" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Tentang</a></li>
-          <li><a href="/careers" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Karier</a></li>
-          <li><a href="/contact" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Kontak</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100">
-          Dukungan
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm">
-          <li><a href="/status" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Status Layanan</a></li>
-          <li><a href="/privacy" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Kebijakan Privasi</a></li>
-          <li><a href="/terms" className="text-gray-600 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200">Syarat & Ketentuan</a></li>
-        </ul>
-      </div>
-    </div>
-
-    {/* Bottom bar */}
-    <div className="flex flex-col-reverse items-center justify-between gap-4 border-t border-gray-200 py-6 text-sm md:flex-row dark:border-gray-800">
-      <p className="text-gray-600 dark:text-gray-400">
-        © {new Date().getFullYear()} Simulasi Ujian. All rights reserved.
-      </p>
-
-      <div className="flex flex-col items-center gap-3 md:flex-row">
-        <p className="text-gray-600 dark:text-gray-400">
-          Dibuat oleh
-        </p>
-
-        <span className="hidden h-4 w-px bg-gray-200 md:block dark:bg-gray-800" aria-hidden="true" />
-
-        {/* Social icons */}
-        <div className="flex items-center gap-2">
-  <a
-    href="https://instagram.com/fahmibastari"
-    target="_blank"
-    rel="noopener noreferrer"
-    title="Instagram @fahmibastari"
-    aria-label="Instagram @fahmibastari"
-    className="group inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-900/50"
-  >
-    <svg viewBox="0 0 24 24" className="h-4 w-4 opacity-80 transition group-hover:opacity-100" aria-hidden="true">
-      <path fill="currentColor" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7m9.5 2.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10m0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/>
-    </svg>
-    <span className="underline decoration-gray-300/70 underline-offset-4 group-hover:decoration-gray-400">
-      Fahmi Bastari
-    </span>
-  </a>
-
-  <span className="h-4 w-px bg-gray-200 dark:bg-gray-800" aria-hidden="true" />
-
-  <a
-    href="https://instagram.com/qorrieaa"
-    target="_blank"
-    rel="noopener noreferrer"
-    title="Instagram @qorriea"
-    aria-label="Instagram @qorriea"
-    className="group inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-900/50"
-  >
-    <svg viewBox="0 0 24 24" className="h-4 w-4 opacity-80 transition group-hover:opacity-100" aria-hidden="true">
-      <path fill="currentColor" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7m9.5 2.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10m0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/>
-    </svg>
-    <span className="underline decoration-gray-300/70 underline-offset-4 group-hover:decoration-gray-400">
-      Qorrie Aina
-    </span>
-  </a>
-</div>
-
-      </div>
-    </div>
-  </div>
-</footer>
-
     </main>
   )
 }
