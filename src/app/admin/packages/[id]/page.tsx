@@ -9,8 +9,9 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Image as ImageIcon, Trash2, Edit2, GripVertical, FileText, CheckSquare, Save, X, ChevronDown, ChevronRight, LayoutList, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Plus, Image as ImageIcon, Trash2, Edit2, GripVertical, FileText, CheckSquare, Save, X, ChevronDown, ChevronRight, LayoutList, AlertCircle, ListChecks, ToggleLeft, Type, AlignLeft, Hash, SlidersHorizontal } from 'lucide-react'
 import ConfirmDeleteForm from '@/app/admin/_components/ConfirmDeleteForm'
+import QuestionFilter from '@/app/admin/_components/QuestionFilter'
 
 // ===== Zod helpers =====
 const BoolFromCheckbox = z.preprocess(
@@ -111,11 +112,12 @@ type Tx =
 
 // ===== Page component =====
 export default async function EditPackagePage(
-  props: { params: Promise<{ id: string }>, searchParams: Promise<{ q?: string }> }
+  props: { params: Promise<{ id: string }>, searchParams: Promise<{ q?: string; type?: string }> }
 ) {
   const { id } = await props.params
   const searchParams = await props.searchParams
   const query = searchParams.q?.toLowerCase() || ''
+  const typeFilter = searchParams.type || ''
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.role !== 'ADMIN') redirect('/login')
 
@@ -675,15 +677,18 @@ export default async function EditPackagePage(
     required: boolean
     settings: any | null
     contextText: string | null
+    passageId: string | null // FIX: Added to resolve TS Error
     passage: { id: string; title: string | null } | null // NEW
     options: Array<{ id: string; label: string; text: string; isCorrect: boolean }>
   }>
 
   // Filter questions if query exists
   // We filter effectively here:
-  const filteredQuestions = query
-    ? questions.filter(q => q.text.toLowerCase().includes(query))
-    : questions
+  const filteredQuestions = questions.filter(q => {
+    const matchText = query ? q.text.toLowerCase().includes(query) : true
+    const matchType = typeFilter ? q.type === typeFilter : true
+    return matchText && matchType
+  })
 
   // Use filteredQuestions for the UI rendering to sections
   const questionsToRender = filteredQuestions
@@ -742,432 +747,290 @@ export default async function EditPackagePage(
           </div>
         </div>
 
-        {/* === PASSAGE SECTION === */}
-        <section className={cardCls}>
-          <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Passage / Reading Section</h2>
-              <p className="text-xs text-slate-500">Buat teks bacaan panjang yang dapat digunakan untuk referensi soal.</p>
-            </div>
-          </div>
+        {/* === FILTER & SEARCH === */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+          <QuestionFilter initialQuery={query} initialType={typeFilter} />
 
-
-          <details className="group mt-3">
-            <summary className="inline-flex items-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 hover:border-indigo-400 cursor-pointer w-full justify-center sm:w-auto">
-              <Plus className="h-4 w-4 transition-transform group-open:rotate-45" />
-              <span className="group-open:hidden">Tambah Passage Baru</span>
-              <span className="hidden group-open:inline">Batal / Tutup Form</span>
+          <details className="relative z-10">
+            <summary className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 cursor-pointer list-none">
+              <Plus className="h-4 w-4" /> Tambah Section / Passage
             </summary>
-
-            <div className="mt-4 p-4 border border-indigo-100 rounded-xl bg-indigo-50/30">
-              <h3 className="text-sm font-semibold text-indigo-900 mb-3">Buat Passage Baru</h3>
-              <form action={createPassage} className="grid gap-4">
+            <div className="absolute right-0 mt-2 w-[500px] max-w-[90vw] p-5 rounded-xl border border-indigo-100 bg-white shadow-xl">
+              <h3 className="font-bold text-slate-900 mb-3 block">Buat Section Baru</h3>
+              <form action={createPassage} className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Judul (opsional)</label>
-                  <input name="title" placeholder="Contoh: Bacaan tentang Sejarah Komputer" className={inputCls} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Isi Passage</label>
-                  <textarea name="content" rows={6} placeholder="Tempel teks bacaan di sini..." className={inputCls} />
-                  <p className="mt-1 text-xs text-slate-500">Markdown didukung. Minimal 10 karakter.</p>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Judul Section</label>
+                  <input name="title" placeholder="e.g. Reading Section 1" className={inputCls} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">File Audio (Opsional)</label>
-                  <input type="file" name="audio" accept="audio/*" className={fileCls} />
-                  <p className="mt-1 text-xs text-slate-500">Format: MP3, WAV, M4A, AAC. Maks 10MB.</p>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Urutan</label>
+                  <input name="order" type="number" placeholder="1" className={inputCls} />
                 </div>
                 <div>
-                  <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm">
-                    <Save className="h-4 w-4" />
-                    Simpan Passage
-                  </button>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Konten Teks</label>
+                  <textarea name="content" rows={4} className={inputCls} placeholder="Isi bacaan..." />
                 </div>
-              </form>
-            </div>
-          </details>
-
-          <div className="mt-6 space-y-4">
-            {passages.length === 0 && (
-              <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center">
-                <p className="text-sm text-slate-500">Belum ada passage yang dibuat.</p>
-              </div>
-            )}
-            {passages.map(p => (
-              <div key={p.id} className="group relative rounded-xl border border-slate-200 bg-slate-50/50 p-4 transition-all hover:bg-white hover:shadow-md">
-                <div className="flex flex-col gap-4 md:flex-row md:items-start">
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded bg-indigo-100 text-xs font-bold text-indigo-700">
-                        P
-                      </div>
-                      <span className="font-semibold text-slate-900">{p.title ?? '(Tanpa Judul)'}</span>
-                    </div>
-                    <div className="line-clamp-3 whitespace-pre-wrap text-sm text-slate-600 font-mono bg-white p-3 rounded border border-slate-200 text-xs">{(p as any).content}</div>
-                    {(p as any).audioUrl && (
-                      <div className="mt-2 flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-                        <div className="font-semibold">Audio Tersedia</div>
-                        <audio controls src={(p as any).audioUrl} className="h-6 w-48" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2 self-start md:self-center">
-                    <details className="relative">
-                      <summary className="list-none">
-                        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
-                          <Edit2 className="h-3 w-3" /> Edit
-                        </div>
-                      </summary>
-                      <div className="absolute right-0 z-10 mt-2 w-[400px] max-w-[90vw] rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-                        <h4 className="font-semibold text-slate-900 mb-3">Edit Passage</h4>
-                        <form action={updatePassage} className="space-y-3">
-                          <input type="hidden" name="id" value={p.id} />
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Judul</label>
-                            <input name="title" defaultValue={p.title ?? ''} className={inputCls} />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Konten</label>
-                            <textarea name="content" defaultValue={(p as any).content ?? ''} rows={5} className={inputCls} />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Update Audio</label>
-                            <input type="file" name="audio" accept="audio/*" className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
-                          </div>
-                          <div className="flex justify-end pt-2">
-                            <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700">Update</button>
-                          </div>
-                        </form>
-                      </div>
-                    </details>
-
-                    <ConfirmDeleteForm action={deletePassage} id={p.id} confirmationMessage="Hapus passage ini? Soal terkait akan kehilangan referensi.">
-                      <button className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
-                        <Trash2 className="h-3 w-3" /> Hapus
-                      </button>
-                    </ConfirmDeleteForm>
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Audio (Opsional)</label>
+                  <input type="file" name="audio" className={fileCls} />
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* CREATE QUESTION SECTION */}
-        <div id="create-question">
-          <details className="group add-q" open={questions.length === 0}>
-            <summary className="flex items-center justify-between w-full p-4 rounded-xl bg-indigo-600 text-white shadow-md cursor-pointer hover:bg-indigo-700 transition list-none">
-              <div className="flex items-center gap-2">
-                <Plus className="h-5 w-5" />
-                <span className="font-semibold">Tambah Soal Baru</span>
-              </div>
-              <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
-            </summary>
-
-            <div className="mt-4 p-6 rounded-xl bg-white border border-slate-200 shadow-sm">
-              <form action={addQuestion} className="space-y-6" noValidate>
-                <div className="grid gap-6 sm:grid-cols-2">
-                  {/* Type Selection */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Tipe Soal</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {[
-                        { v: 'SINGLE_CHOICE', l: 'Pilihan Ganda' },
-                        { v: 'MULTI_SELECT', l: 'Pilihan Ganda Kompleks' },
-                        { v: 'TRUE_FALSE', l: 'Benar / Salah' },
-                        { v: 'SHORT_TEXT', l: 'Isian Singkat' },
-                        { v: 'ESSAY', l: 'Uraian' },
-                        { v: 'NUMBER', l: 'Angka' },
-                        { v: 'RANGE', l: 'Skala / Range' } // Fixed label
-                      ].map(opt => (
-                        <label key={opt.v} className="cursor-pointer relative">
-                          <input type="radio" name="type" value={opt.v} className="peer sr-only" defaultChecked={opt.v === 'SINGLE_CHOICE'} />
-                          <div className="rounded-lg border border-slate-200 p-3 text-center text-sm font-medium text-slate-600 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:text-indigo-700 hover:border-indigo-300">
-                            {opt.l}
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Basic Info */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Urutan</label>
-                    <input name="order" placeholder="Otomatis (akhir)" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Poin / Bobot</label>
-                    <input name="points" type="number" min={0} defaultValue={1} className={inputCls} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                      <input name="required" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" />
-                      <span className="text-sm font-medium text-slate-700">Wajib Diisi (Siswa harus menjawab)</span>
-                    </label>
-                  </div>
-
-                  {/* Content */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Pertanyaan</label>
-                    <textarea name="text" rows={3} className={inputCls} placeholder="Tulis pertanyaan di sini (Markdown didukung)..." required />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Gambar Soal (Opsional)</label>
-                    <input type="file" name="image" accept="image/*" className={fileCls} />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Audio Soal (Opsional)</label>
-                    <input type="file" name="audio" accept="audio/*" className={fileCls} />
-                    <p className="mt-1 text-xs text-slate-500">Listening Section. MP3/WAV/AAC/M4A. Max 10MB.</p>
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Passage Referensi (opsional)</label>
-                    <select name="passageId" className={inputCls}>
-                      <option value="">— Tidak menggunakan passage —</option>
-                      {passages.map(p => (
-                        <option key={p.id} value={p.id}>{p.title || '(Tanpa Judul)'} - {p.id.slice(0, 8)}...</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* OPTIONS SECTION AREA - Styled based on selection logic handled by JS ideally, but here CSS/Details */}
-                  <div className="sm:col-span-2 border-t border-slate-100 pt-6">
-                    <h4 className="font-semibold text-slate-900 mb-4">Opsi Jawaban & Kunci</h4>
-
-                    <div className="space-y-6">
-                      {/* Multiple Choice Blocks */}
-                      <div className="grid gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Untuk Pilihan Ganda / Kompleks</p>
-                        {['A', 'B', 'C', 'D', 'E'].map(label => (
-                          <div key={label} className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white border border-slate-300 font-bold text-slate-600 shadow-sm">
-                              {label}
-                            </div>
-                            <div className="flex-1 space-y-2">
-                              <input name={label} placeholder={`Pilihan ${label}`} className={inputCls} />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer" title="Benar untuk Single Choice">
-                                <input type="radio" name="correctLabel" value={label} className="text-indigo-600 focus:ring-indigo-600" />
-                                <span>Kunci (Satu)</span>
-                              </label>
-                              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer" title="Benar untuk Multi Select">
-                                <input type="checkbox" name="correctMulti" value={label} className="rounded text-indigo-600 focus:ring-indigo-600" />
-                                <span>Kunci (Multi)</span>
-                              </label>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* True False */}
-                      <div className="grid sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                        <p className="sm:col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Untuk True / False</p>
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Label Benar</label>
-                          <input name="tfTrueText" defaultValue="Benar" className={inputCls} />
-                          <label className="mt-2 flex items-center gap-2">
-                            <input type="radio" name="correctTF" value="TRUE" className="text-indigo-600" />
-                            <span className="text-sm font-medium">Ini Jawaban Benar</span>
-                          </label>
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Label Salah</label>
-                          <input name="tfFalseText" defaultValue="Salah" className={inputCls} />
-                          <label className="mt-2 flex items-center gap-2">
-                            <input type="radio" name="correctTF" value="FALSE" className="text-indigo-600" />
-                            <span className="text-sm font-medium">Ini Jawaban Benar</span>
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* Numeric / Range */}
-                      <div className="grid sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                        <p className="sm:col-span-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Untuk Angka, Range, & Text</p>
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Target Angka</label>
-                          <input name="targetNumber" type="number" step="any" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Toleransi (+/-)</label>
-                          <input name="tolerance" type="number" step="any" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Min (Range)</label>
-                          <input name="min" type="number" step="any" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Max (Range)</label>
-                          <input name="max" type="number" step="any" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Step (Range)</label>
-                          <input name="step" type="number" step="any" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Max Length (Text)</label>
-                          <input name="maxLength" type="number" className={inputCls} />
-                        </div>
-                        <div className="sm:col-span-3">
-                          <label className="flex items-center gap-2">
-                            <input type="checkbox" name="caseSensitive" className="rounded text-indigo-600" />
-                            <span className="text-sm text-slate-700">Case Sensitive (Huruf Besar/Kecil berpengaruh)</span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-4">
-                  <button className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98]">
-                    <Plus className="h-5 w-5" />
-                    Tambahkan Soal
-                  </button>
-                </div>
+                <button className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-bold text-white hover:bg-indigo-700">Simpan Section</button>
               </form>
             </div>
           </details>
         </div>
 
+        {/* === SECTIONS RENDERER === */}
+        <div className="space-y-12">
+          {/* 1. Map Passages (Sections) */}
+          {passages.map((p) => {
+            // Use filteredQuestions here to respect search
+            const sectionQuestions = filteredQuestions.filter(q => q.passageId === p.id)
 
-        {/* QUESTIONS LIST */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
-            <CheckSquare className="h-5 w-5 text-slate-500" />
-            <h3 className="text-lg font-bold text-slate-900">Daftar Soal</h3>
-          </div>
+            // If searching and no questions match in this section, and section title doesn't match query, maybe hide?
+            // For now, let's always show sections to allow adding questions, unless query is strict.
+            // But simpler is to just render.
 
-          {questions.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
-              <div className="rounded-full bg-indigo-50 p-4 mb-4">
-                <FileText className="h-8 w-8 text-indigo-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900">Belum ada soal</h3>
-              <p className="mt-1 text-sm text-slate-500 max-w-xs mx-auto">Mulai tambahkan soal pertama Anda menggunakan formulir di atas.</p>
-            </div>
-          )}
-
-          <div className="grid gap-6">
-            {questions.map((q) => (
-              <div key={q.id} className="group relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:border-indigo-200">
-                <div className="absolute right-4 top-4 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <details className="relative">
-                    <summary className="list-none">
-                      <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-indigo-600 hover:border-indigo-200 cursor-pointer">
-                        <Edit2 className="h-4 w-4" />
-                      </div>
-                    </summary>
-                    {/* Edit Form Popup (Simplified for brevity, could be modal) */}
-                    <div className="absolute right-0 z-20 mt-2 w-[600px] max-w-[90vw] rounded-xl border border-slate-200 bg-white p-6 shadow-xl ring-1 ring-black/5">
-                      <h4 className="font-bold text-slate-900 mb-4 border-b pb-2">Edit Soal #{q.order}</h4>
-                      <form action={updateQuestion} className="space-y-4">
-                        <input type="hidden" name="id" value={q.id} />
-                        <input type="hidden" name="type" value={q.type} />
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-xs font-semibold text-slate-500">Urutan</label>
-                            <input name="order" defaultValue={q.order} className={inputCls} />
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold text-slate-500">Poin</label>
-                            <input name="points" type="number" defaultValue={q.points} className={inputCls} />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-slate-500">Pertanyaan</label>
-                          <textarea name="text" defaultValue={q.text} rows={3} className={inputCls} />
-                        </div>
-
-                        {/* Minimal field support for editing - fully supporting all fields in a small dropdown is hard, usually needs separate page or modal. Adding essentials here. */}
-                        <div className="p-3 bg-amber-50 rounded border border-amber-100 text-xs text-amber-800">
-                          <AlertCircle className="inline h-3 w-3 mr-1" />
-                          Fitur edit cepat terbatas. Hapus dan buat ulang jika ingin mengubah Tipe Soal secara drastis.
-                        </div>
-
-                        <div className="flex justify-end gap-2 pt-2">
-                          <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Simpan Perubahan</button>
-                        </div>
-                      </form>
+            return (
+              <section key={p.id} className="rounded-2xl border border-indigo-100 bg-white shadow-sm ring-1 ring-indigo-50/50 overflow-hidden">
+                {/* Section Header */}
+                <div className="border-b border-indigo-50 bg-indigo-50/30 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm border border-indigo-100">
+                      {/* @ts-ignore */}
+                      {p.audioUrl ? <div className="font-bold text-xs">MP3</div> : <FileText className="h-6 w-6" />}
                     </div>
-                  </details>
-
-                  <ConfirmDeleteForm action={deleteQuestion} id={q.id} confirmationMessage="Hapus soal ini?">
-                    <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-500 shadow-sm hover:bg-red-50 hover:border-red-300">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </ConfirmDeleteForm>
-                </div>
-
-                <div className="flex items-start gap-4 pr-16">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-lg font-bold text-indigo-700">
-                    {q.order}
-                  </div>
-                  <div className="flex-1 space-y-3">
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                          {q.type.replace('_', ' ')}
-                        </span>
-                        {q.required && (
-                          <span className="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-600">
-                            Required
-                          </span>
-                        )}
-                        <span className="text-xs text-slate-400">
-                          {q.points} Poin
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-slate-900">{p.title || 'Untitled Section'}</h3>
+                        {/* @ts-ignore */}
+                        <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">#{p.order}</span>
                       </div>
-                      <p className="text-slate-900 font-medium whitespace-pre-wrap">{q.text}</p>
+                      <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
+                        <span>{sectionQuestions.length} Soal</span>
+                        {/* @ts-ignore */}
+                        {(p as any).audioUrl && <span className="flex items-center gap-1 text-emerald-600 font-medium"><div className="h-2 w-2 rounded-full bg-emerald-500" /> Audio Enabled</span>}
+                      </div>
                     </div>
+                  </div>
 
-                    {q.imageUrl && (
-                      <div className="relative h-40 w-full max-w-sm overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={q.imageUrl} alt="Soal" className="h-full w-full object-contain" />
+                  {/* Section Actions */}
+                  <div className="flex gap-2">
+                    <details className="relative">
+                      <summary className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer list-none shadow-sm">
+                        <Edit2 className="h-3 w-3" /> Edit Section
+                      </summary>
+                      {/* Edit Passage Form Overlay */}
+                      <div className="absolute right-0 top-full z-20 mt-2 w-[400px] max-w-[85vw] rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+                        <h4 className="font-bold mb-3">Edit Section</h4>
+                        <form action={updatePassage} className="space-y-3">
+                          <input type="hidden" name="id" value={p.id} />
+                          <div><label className="text-xs font-bold text-slate-500">Judul</label><input name="title" defaultValue={p.title ?? ''} className={inputCls} /></div>
+                          <div><label className="text-xs font-bold text-slate-500">Urutan</label><input name="order" type="number" defaultValue={(p as any).order ?? 0} className={inputCls} /></div>
+                          <div><label className="text-xs font-bold text-slate-500">Konten</label><textarea name="content" defaultValue={(p as any).content} rows={3} className={inputCls} /></div>
+                          <div><label className="text-xs font-bold text-slate-500">Update Audio</label><input type="file" name="audio" className={fileCls} /></div>
+                          <div className="pt-2"><button className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-bold text-white">Simpan Perubahan</button></div>
+                        </form>
                       </div>
-                    )}
-
-                    {q.passage && (
-                      <div className="inline-flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-1.5 text-xs text-indigo-700">
-                        <FileText className="h-3 w-3" />
-                        Referensi: {q.passage.title || 'Passage'}
-                      </div>
-                    )}
-
-                    {/* Options View */}
-                    {q.options.length > 0 && (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {q.options.map(opt => (
-                          <div key={opt.id} className={`flex items-start gap-2 rounded-lg border p-2 text-sm ${opt.isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-100 bg-white text-slate-600'}`}>
-                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs font-bold ${opt.isCorrect ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
-                              {opt.label}
-                            </span>
-                            <span>{opt.text}</span>
-                            {opt.isCorrect && <CheckSquare className="ml-auto h-4 w-4 text-emerald-500" />}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Settings View for non-option types */}
-                    {q.settings && (
-                      <div className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600 font-mono border border-slate-200">
-                        {JSON.stringify(q.settings).replace(/["{}]/g, '').replace(/,/g, ', ')}
-                      </div>
-                    )}
+                    </details>
+                    <ConfirmDeleteForm action={deletePassage} id={p.id} confirmationMessage="Hapus section ini? Soal di dalamnya akan menjadi orphaned (tanpa section).">
+                      <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 shadow-sm">
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </ConfirmDeleteForm>
                   </div>
                 </div>
+
+                {/* Section Content Preview */}
+                <div className="bg-slate-50/50 p-5 text-sm text-slate-600 border-b border-slate-100">
+                  <details className="group">
+                    <summary className="cursor-pointer font-medium text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1">Lihat Konten Passage <ChevronDown className="h-4 w-4 group-open:rotate-180 transition-transform" /></summary>
+                    <div className="mt-3 bg-white p-4 rounded-xl border border-slate-200 font-serif leading-relaxed whitespace-pre-wrap">{(p as any).content}</div>
+                    {/* @ts-ignore */}
+                    {(p as any).audioUrl && <div className="mt-3"><audio controls src={(p as any).audioUrl} className="w-full h-8" /></div>}
+                  </details>
+                </div>
+
+                {/* Questions in this Section */}
+                <div className="p-5 bg-slate-50/30">
+                  <div className="space-y-4">
+                    {sectionQuestions.map(q => (
+                      <div key={q.id} className="group relative rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all">
+                        {/* Question Item Render (Simplified Reuse) */}
+                        <div className="flex gap-4">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 font-bold text-slate-600 text-sm">{q.order}</div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{q.type}</span>
+                              <span className="text-xs font-medium text-slate-400">{q.points} Poin</span>
+                            </div>
+                            <p className="text-sm font-medium text-slate-900 line-clamp-2">{q.text}</p>
+                          </div>
+                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Just Edit/Delete Buttons for Question */}
+                            <details className="relative">
+                              <summary className="list-none inline-flex p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-white hover:text-indigo-600 border border-transparent hover:border-slate-200 cursor-pointer"><Edit2 className="h-4 w-4" /></summary>
+                              <div className="absolute right-0 z-10 mt-2 w-[400px] bg-white p-5 rounded-xl shadow-xl border border-slate-100">
+                                <h4 className="font-bold mb-4">Edit Soal {q.order}</h4>
+                                <form action={updateQuestion} className="space-y-3">
+                                  <input type="hidden" name="id" value={q.id} />
+                                  <input type="hidden" name="type" value={q.type} />
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-xs font-bold">Urutan</label><input name="order" defaultValue={q.order} className={inputCls} /></div>
+                                    <div><label className="text-xs font-bold">Poin</label><input name="points" defaultValue={q.points} className={inputCls} /></div>
+                                  </div>
+                                  <div><label className="text-xs font-bold">Pertanyaan</label><textarea name="text" defaultValue={q.text} rows={2} className={inputCls} /></div>
+                                  <div className="flex justify-end pt-2"><button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-white text-xs font-bold">Simpan</button></div>
+                                </form>
+                              </div>
+                            </details>
+                            <ConfirmDeleteForm action={deleteQuestion} id={q.id} confirmationMessage="Hapus soal ini?"><button className="inline-flex p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"><Trash2 className="h-4 w-4" /></button></ConfirmDeleteForm>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {sectionQuestions.length === 0 && <div className="text-center py-6 text-sm text-slate-400 italic">Belum ada soal di section ini.</div>}
+                  </div>
+
+                  {/* Add Question to Section Button */}
+                  <div className="mt-4 pt-4 border-t border-slate-200/50">
+                    <details className="group add-q">
+                      <summary className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/30 text-indigo-600 font-semibold text-sm hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer list-none transition-colors">
+                        <Plus className="h-4 w-4" /> Tambah Soal di Section ini
+                      </summary>
+                      <div className="mt-4 bg-white rounded-xl border border-indigo-100 shadow-lg p-6">
+                        {/* REUSE CREATE FORM BUT PRESET passageId */}
+                        <h4 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2">Tambah Soal ke: {p.title}</h4>
+                        <form action={addQuestion} className="space-y-6">
+                          <input type="hidden" name="passageId" value={p.id} />
+
+                          {/* DENSITY FIX: Grid for Types */}
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Pilih Tipe Soal</label>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                              {[
+                                { id: 'SINGLE_CHOICE', l: 'PG', i: <CheckSquare className="h-4 w-4" /> },
+                                { id: 'MULTI_SELECT', l: 'Multi', i: <ListChecks className="h-4 w-4" /> },
+                                { id: 'TRUE_FALSE', l: 'T/F', i: <ToggleLeft className="h-4 w-4" /> },
+                                { id: 'SHORT_TEXT', l: 'Isian', i: <Type className="h-4 w-4" /> },
+                                { id: 'ESSAY', l: 'Essay', i: <AlignLeft className="h-4 w-4" /> },
+                                { id: 'NUMBER', l: 'Angka', i: <Hash className="h-4 w-4" /> },
+                                { id: 'RANGE', l: 'Skala', i: <SlidersHorizontal className="h-4 w-4" /> },
+                              ].map(t => (
+                                <label key={t.id} className="cursor-pointer relative group">
+                                  <input type="radio" name="type" value={t.id} className="peer sr-only" defaultChecked={t.id === 'SINGLE_CHOICE'} />
+                                  <div className="flex flex-col items-center gap-1 p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600 transition-all">
+                                    {t.i}
+                                    <span className="text-[10px] font-bold text-center leading-tight">{t.l}</span>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Basic Fields Grid */}
+                          <div className="grid sm:grid-cols-2 gap-4">
+                            <div><label className="text-xs font-bold text-slate-500">Urutan</label><input name="order" className={inputCls} placeholder="Auto" /></div>
+                            <div><label className="text-xs font-bold text-slate-500">Poin</label><input name="points" type="number" defaultValue={1} className={inputCls} /></div>
+                            <div className="sm:col-span-2"><label className="text-xs font-bold text-slate-500">Pertanyaan</label><textarea name="text" rows={2} className={inputCls} required /></div>
+
+                            {/* Audio/Image for Question */}
+                            <div><label className="text-xs font-bold text-slate-500">Gambar (Opsional)</label><input type="file" name="image" className={fileCls} /></div>
+                            <div><label className="text-xs font-bold text-slate-500">Audio (Opsional)</label><input type="file" name="audio" className={fileCls} /></div>
+                          </div>
+
+                          {/* Options (Simplified Render) */}
+                          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <p className="text-xs font-semibold text-slate-500 mb-3">Opsi Jawaban (Isi sesuai tipe)</p>
+                            <div className="space-y-3">
+                              {['A', 'B', 'C', 'D'].map(l => (
+                                <div key={l} className="flex gap-2">
+                                  <span className="flex h-9 w-9 items-center justify-center rounded bg-white border font-bold text-slate-500 text-xs">{l}</span>
+                                  <input name={l} placeholder={`Opsi ${l}`} className={inputCls} />
+                                  <label className="flex items-center px-2 cursor-pointer"><input type="radio" name="correctLabel" value={l} title="Correct (Single)" /></label>
+                                  <label className="flex items-center px-2 cursor-pointer"><input type="checkbox" name="correctMulti" value={l} title="Correct (Multi)" /></label>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end">
+                            <button className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow hover:bg-indigo-700">Simpan Soal</button>
+                          </div>
+                        </form>
+                      </div>
+                    </details>
+                  </div>
+                </div>
+              </section>
+            )
+          })}
+
+          {/* 2. Orphaned Questions */}
+          {filteredQuestions.filter(q => !q.passageId).length > 0 && (
+            <section className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-6">
+              <h3 className="font-bold text-slate-700 text-lg mb-4 flex items-center gap-2"><LayoutList className="h-5 w-5" /> Soal Tanpa Section</h3>
+              <div className="grid gap-4">
+                {filteredQuestions.filter(q => !q.passageId).map(q => (
+                  <div key={q.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex gap-4">
+                    <div className="font-bold text-slate-500">#{q.order}</div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{q.text}</p>
+                      <div className="mt-2 flex gap-2">
+                        <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">{q.type}</span>
+                      </div>
+                    </div>
+                    <ConfirmDeleteForm action={deleteQuestion} id={q.id} confirmationMessage="Hapus soal?">
+                      <button className="text-rose-500 hover:bg-rose-50 p-2 rounded"><Trash2 className="h-4 w-4" /></button>
+                    </ConfirmDeleteForm>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+              <div className="mt-6">
+                {/* Add Standalone Question Button logic similar to above but passageId=null */}
+                <details className="group">
+                  <summary className="inline-flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-300 cursor-pointer list-none">
+                    <Plus className="h-4 w-4" /> Tambah Soal Standalone
+                  </summary>
+                  <div className="mt-4 bg-white p-6 rounded-xl border border-slate-300 shadow-lg">
+                    <h4 className="font-bold mb-4">Tambah Soal Standalone</h4>
+                    <form action={addQuestion} className="space-y-4">
+                      {/* Same fields but passageId hidden/empty */}
+                      <input type="hidden" name="passageId" value="" />
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Pilih Tipe Soal</label>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                          {[
+                            { id: 'SINGLE_CHOICE', l: 'PG', i: <CheckSquare className="h-4 w-4" /> },
+                            { id: 'MULTI_SELECT', l: 'Multi', i: <ListChecks className="h-4 w-4" /> },
+                            { id: 'TRUE_FALSE', l: 'T/F', i: <ToggleLeft className="h-4 w-4" /> },
+                            { id: 'SHORT_TEXT', l: 'Isian', i: <Type className="h-4 w-4" /> },
+                            { id: 'ESSAY', l: 'Essay', i: <AlignLeft className="h-4 w-4" /> },
+                            { id: 'NUMBER', l: 'Angka', i: <Hash className="h-4 w-4" /> },
+                            { id: 'RANGE', l: 'Skala', i: <SlidersHorizontal className="h-4 w-4" /> },
+                          ].map(t => (
+                            <label key={t.id} className="cursor-pointer relative group">
+                              <input type="radio" name="type" value={t.id} className="peer sr-only" defaultChecked={t.id === 'SINGLE_CHOICE'} />
+                              <div className="flex flex-col items-center gap-1 p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600 transition-all">
+                                {t.i}
+                                <span className="text-[10px] font-bold text-center leading-tight">{t.l}</span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div><label className="text-xs font-bold text-slate-500">Urutan</label><input name="order" className={inputCls} placeholder="Auto" /></div>
+                        <div><label className="text-xs font-bold text-slate-500">Poin</label><input name="points" type="number" defaultValue={1} className={inputCls} /></div>
+                        <div className="sm:col-span-2"><label className="text-xs font-bold text-slate-500">Pertanyaan</label><textarea name="text" rows={2} className={inputCls} required /></div>
+                      </div>
+                      <div className="flex justify-end pt-2"><button className="rounded-lg bg-indigo-600 px-4 py-2 text-white font-bold text-sm">Simpan</button></div>
+                    </form>
+                  </div>
+                </details>
+              </div>
+            </section>
+          )}
         </div>
 
       </section>
