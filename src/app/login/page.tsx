@@ -3,6 +3,8 @@ import { signIn, useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { ThemeToggle } from '@/components/ThemeToggle'
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,11 +36,14 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center p-6 bg-slate-50">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl ring-1 ring-slate-900/5">
+    <main className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center p-6 bg-slate-50 dark:bg-slate-950 transition-colors">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-xl ring-1 ring-slate-900/5 dark:ring-slate-100/10 transition-all">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Masuk Admin</h1>
-          <p className="mt-2 text-sm text-slate-600">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Masuk Admin</h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
             Gunakan akun admin untuk mengelola paket &amp; hasil ujian.
           </p>
         </div>

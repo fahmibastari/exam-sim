@@ -73,16 +73,16 @@ export default async function AdminPackagesPage() {
 
   // ===== UI helpers =====
   const inputCls =
-    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
-  const cardCls = 'rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200'
+    'w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+  const cardCls = 'rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-sm ring-1 ring-slate-200 dark:ring-slate-800'
 
   return (
     <div className="space-y-8">
       {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Manajemen Paket Soal</h1>
-          <p className="mt-1 text-sm text-slate-600">Buat, kelola, dan publikasikan paket ujian Anda di sini.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Manajemen Paket Soal</h1>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Buat, kelola, dan publikasikan paket ujian Anda di sini.</p>
         </div>
       </div>
 
@@ -91,15 +91,15 @@ export default async function AdminPackagesPage() {
         <div className="lg:col-span-1">
           <form action={createPackage} className={`${cardCls} sticky top-24`}>
             <div className="flex items-center gap-2 mb-4">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
                 <Plus className="h-5 w-5" />
               </div>
-              <h2 className="text-base font-semibold text-slate-900">Buat Paket Baru</h2>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Buat Paket Baru</h2>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="title" className="mb-1 block text-xs font-medium text-slate-700 uppercase tracking-wider">
+                <label htmlFor="title" className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Judul Paket
                 </label>
                 <input
@@ -112,7 +112,7 @@ export default async function AdminPackagesPage() {
               </div>
 
               <div>
-                <label htmlFor="timeLimitMin" className="mb-1 block text-xs font-medium text-slate-700 uppercase tracking-wider">
+                <label htmlFor="timeLimitMin" className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Durasi (Menit)
                 </label>
                 <div className="relative">
@@ -129,7 +129,7 @@ export default async function AdminPackagesPage() {
               </div>
 
               <div>
-                <label htmlFor="description" className="mb-1 block text-xs font-medium text-slate-700 uppercase tracking-wider">
+                <label htmlFor="description" className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Deskripsi
                 </label>
                 <textarea
@@ -142,7 +142,7 @@ export default async function AdminPackagesPage() {
               </div>
 
               <div>
-                <label htmlFor="token" className="mb-1 block text-xs font-medium text-slate-700 uppercase tracking-wider">
+                <label htmlFor="token" className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Token Akses
                 </label>
                 <div className="relative">
@@ -156,7 +156,7 @@ export default async function AdminPackagesPage() {
                     required
                   />
                 </div>
-                <p className="mt-1.5 text-xs text-slate-500">Token digunakan peserta untuk masuk ujian.</p>
+                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Token digunakan peserta untuk masuk ujian.</p>
               </div>
 
               <div className="pt-2">
@@ -171,35 +171,35 @@ export default async function AdminPackagesPage() {
 
         {/* Right Column: List */}
         <div className="lg:col-span-2 space-y-4">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             <FileText className="h-5 w-5 text-slate-400" />
             Daftar Paket ({pkgs.length})
           </h2>
 
           {pkgs.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
-              <div className="mx-auto h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-12 text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center mb-3">
                 <Package className="h-6 w-6 text-slate-400" />
               </div>
-              <h3 className="text-sm font-medium text-slate-900">Belum ada paket</h3>
-              <p className="mt-1 text-sm text-slate-500">Buat paket ujian pertama Anda di panel sebelah kiri.</p>
+              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Belum ada paket</h3>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Buat paket ujian pertama Anda di panel sebelah kiri.</p>
             </div>
           ) : (
             <div className="grid gap-4">
               {pkgs.map((p) => (
-                <div key={p.id} className="group relative rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md hover:ring-indigo-500/30">
+                <div key={p.id} className="group relative rounded-xl bg-white dark:bg-slate-900 p-5 shadow-sm ring-1 ring-slate-200 dark:ring-slate-800 transition-all hover:shadow-md hover:ring-indigo-500/30">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-base font-semibold text-slate-900 truncate pr-2">
+                        <h3 className="text-base font-semibold text-slate-900 dark:text-white truncate pr-2">
                           {p.title}
                         </h3>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${p.isActive ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-slate-50 text-slate-600 ring-slate-500/20'
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${p.isActive ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 ring-green-600/20' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 ring-slate-500/20'
                           }`}>
                           {p.isActive ? 'Aktif' : 'Draft'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
+                      <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mt-1">
                         <div className="flex items-center gap-1.5">
                           <Clock className="h-3.5 w-3.5" />
                           {p.timeLimitMin ? `${p.timeLimitMin} Menit` : 'Tanpa Batas'}
@@ -214,7 +214,7 @@ export default async function AdminPackagesPage() {
                         </div>
                       </div>
                       {p.description && (
-                        <p className="mt-2 text-sm text-slate-600 line-clamp-2">{p.description}</p>
+                        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 line-clamp-2">{p.description}</p>
                       )}
                     </div>
 
@@ -225,8 +225,8 @@ export default async function AdminPackagesPage() {
                         <button
                           title={p.isActive ? 'Matikan' : 'Aktifkan'}
                           className={`p-2 rounded-lg transition-colors ${p.isActive
-                              ? 'text-green-600 hover:bg-green-50'
-                              : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                            ? 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30'
+                            : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300'
                             }`}
                         >
                           {p.isActive ? <Play className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5" />}
@@ -235,16 +235,16 @@ export default async function AdminPackagesPage() {
                     </div>
                   </div>
 
-                  <div className="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4">
+                  <div className="mt-5 flex items-center gap-2 border-t border-slate-100 dark:border-slate-800 pt-4">
                     <a
                       href={`/admin/packages/${p.id}`}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-indigo-600 shadow-sm ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white dark:bg-slate-900 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-inset ring-indigo-200 dark:ring-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                     >
                       Kelola Soal
                     </a>
                     <a
                       href={`/admin/packages/${p.id}/settings`}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white dark:bg-slate-900 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       Edit Paket
                     </a>

@@ -56,15 +56,14 @@ export default async function ResultPage({
   const scoreColor = getScoreColor(score)
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
-      <Header />
+    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-50">
 
       <main className="flex-1">
         <section className="relative overflow-hidden py-16 md:py-24">
           {/* Background Decoration */}
-          <div className="absolute inset-0 z-0 bg-white">
-            <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-indigo-50 blur-3xl opacity-50" />
-            <div className="absolute top-1/2 -left-24 h-64 w-64 rounded-full bg-blue-50 blur-3xl opacity-50" />
+          <div className="absolute inset-0 z-0 bg-white dark:bg-slate-950">
+            <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-indigo-50 dark:bg-indigo-900/20 blur-3xl opacity-50" />
+            <div className="absolute top-1/2 -left-24 h-64 w-64 rounded-full bg-blue-50 dark:bg-blue-900/20 blur-3xl opacity-50" />
           </div>
 
           <div className="relative z-10 mx-auto max-w-3xl px-6 lg:px-8 text-center">
@@ -72,11 +71,11 @@ export default async function ResultPage({
               <Trophy className="h-10 w-10" />
             </div>
 
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               Hasil Ujian Anda
             </h1>
-            <p className="mt-4 text-lg text-slate-600">
-              Anda telah menyelesaikan paket ujian <span className="font-semibold text-slate-900">"{attempt.ExamPackage?.title ?? '-'}"</span>.
+            <p className="mt-4 text-lg text-slate-600 dark:text-slate-400">
+              Anda telah menyelesaikan paket ujian <span className="font-semibold text-slate-900 dark:text-white">"{attempt.ExamPackage?.title ?? '-'}"</span>.
             </p>
           </div>
         </section>
@@ -84,8 +83,8 @@ export default async function ResultPage({
         <section className="mx-auto max-w-4xl px-6 pb-20 -mt-10 relative z-20">
           <div className="grid gap-6 md:grid-cols-3">
             {/* Score Card */}
-            <div className="md:col-span-1 rounded-3xl bg-white p-8 shadow-xl shadow-slate-200/50 ring-1 ring-slate-200 text-center flex flex-col items-center justify-center">
-              <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-2">Nilai Akhir</div>
+            <div className="md:col-span-1 rounded-3xl bg-white dark:bg-slate-900 p-8 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 ring-1 ring-slate-200 dark:ring-slate-800 text-center flex flex-col items-center justify-center">
+              <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Nilai Akhir</div>
               <div className={`flex h-32 w-32 items-center justify-center rounded-full border-4 text-5xl font-extrabold shadow-sm ${scoreColor}`}>
                 {score}
               </div>
@@ -93,40 +92,40 @@ export default async function ResultPage({
             </div>
 
             {/* Details Card */}
-            <div className="md:col-span-2 rounded-3xl bg-white p-8 shadow-xl shadow-slate-200/50 ring-1 ring-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+            <div className="md:col-span-2 rounded-3xl bg-white dark:bg-slate-900 p-8 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 ring-1 ring-slate-200 dark:ring-slate-800">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
                 <FileText className="h-5 w-5 text-indigo-500" />
                 Detail Pengerjaan
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8">
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Peserta</label>
-                  <div className="mt-1 font-medium text-slate-900">{attempt.participantName ?? '-'}</div>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nama Peserta</label>
+                  <div className="mt-1 font-medium text-slate-900 dark:text-white">{attempt.participantName ?? '-'}</div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Email / Info</label>
-                  <div className="mt-1 font-medium text-slate-900">{attempt.participantEmail ?? attempt.participantInfo ?? '-'}</div>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Email / Info</label>
+                  <div className="mt-1 font-medium text-slate-900 dark:text-white">{attempt.participantEmail ?? attempt.participantInfo ?? '-'}</div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Waktu Submit</label>
-                  <div className="mt-1 font-medium text-slate-900 flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Waktu Submit</label>
+                  <div className="mt-1 font-medium text-slate-900 dark:text-white flex items-center gap-2">
                     <Clock className="h-3.5 w-3.5 text-slate-400" />
                     {attempt.submittedAt?.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Statistik</label>
-                  <div className="mt-1 font-medium text-slate-900">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Statistik</label>
+                  <div className="mt-1 font-medium text-slate-900 dark:text-white">
                     {total} Soal · {correct ?? '-'} Benar
                   </div>
                 </div>
               </div>
 
-              <div className="mt-8 pt-8 border-t border-slate-100 flex flex-col sm:flex-row gap-4">
+              <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-4">
                 <Link
                   href="/"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 transition-all"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 transition-all"
                 >
                   <Home className="h-4 w-4" />
                   Kembali ke Beranda
@@ -144,8 +143,6 @@ export default async function ResultPage({
         </section>
 
       </main>
-
-      <Footer />
     </div>
   )
 }

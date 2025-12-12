@@ -12,6 +12,8 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, Image as ImageIcon, Trash2, Edit2, GripVertical, FileText, CheckSquare, Save, X, ChevronDown, ChevronRight, LayoutList, AlertCircle, ListChecks, ToggleLeft, Type, AlignLeft, Hash, SlidersHorizontal } from 'lucide-react'
 import ConfirmDeleteForm from '@/app/admin/_components/ConfirmDeleteForm'
 import QuestionFilter from '@/app/admin/_components/QuestionFilter'
+import ClientActionForm from '@/app/admin/_components/ClientActionForm'
+import DynamicQuestionForm from '@/app/admin/_components/DynamicQuestionForm'
 
 // ===== Zod helpers =====
 const BoolFromCheckbox = z.preprocess(
@@ -216,153 +218,168 @@ export default async function EditPackagePage(
     }
 
     const parsed = CreateSchema.safeParse(raw)
-    if (!parsed.success) throw new Error('Data soal tidak valid')
+    if (!parsed.success) {
+      return { error: 'Data soal tidak valid. Pastikan semua field wajib terisi.' }
+    }
 
     const p = parsed.data
-    const imageUrl = await uploadImage(id, parsed.data.image as File | null)
-    const audioUrl = await uploadAudio(id, raw.audio)
+    let imageUrl, audioUrl
+    try {
+      imageUrl = await uploadImage(id, parsed.data.image as File | null)
+      audioUrl = await uploadAudio(id, raw.audio)
+    } catch (e: any) {
+      return { error: e.message }
+    }
 
-    const last = await prisma.question.findFirst({
-      where: { examPackageId: id },
-      orderBy: { order: 'desc' },
-      select: { order: true },
-    })
 
-    let safeOrder = Number(p.order)
-    if (!Number.isFinite(safeOrder) || safeOrder <= 0) {
-      safeOrder = (last?.order ?? 0) + 1
-    } else {
-      const exists = await prisma.question.findFirst({
-        where: { examPackageId: id, order: safeOrder },
-        select: { id: true },
+
+    try {
+      const last = await prisma.question.findFirst({
+        where: { examPackageId: id },
+        orderBy: { order: 'desc' },
+        select: { order: true },
       })
-      if (exists) {
-        // kalau bentrok, dorong ke paling akhir
+
+      let safeOrder = Number(p.order)
+      if (!Number.isFinite(safeOrder) || safeOrder <= 0) {
         safeOrder = (last?.order ?? 0) + 1
-      }
-    }
-
-    type Opt = { label: string; text: string; isCorrect?: boolean }
-
-    const type = p.type
-    let options: Opt[] = []
-    let settings: Record<string, any> | undefined = undefined
-
-    if (type === 'SINGLE_CHOICE') {
-      const labels4: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
-      for (const L of labels4) {
-        const text = (p as any)[L]
-        if (!text || String(text).trim() === '') {
-          throw new Error(`Opsi ${L} wajib diisi untuk tipe Single Choice`)
-        }
-      }
-      if (!p.correctLabel) throw new Error('Pilih jawaban benar (Single Choice)')
-
-      // validasi jika correctLabel = 'E', pastikan E terisi
-      if (p.correctLabel === 'E') {
-        if (!p.E || String(p.E).trim() === '') {
-          throw new Error('Opsi E dipilih sebagai jawaban benar, tetapi kosong')
+      } else {
+        const exists = await prisma.question.findFirst({
+          where: { examPackageId: id, order: safeOrder },
+          select: { id: true },
+        })
+        if (exists) {
+          // kalau bentrok, dorong ke paling akhir
+          safeOrder = (last?.order ?? 0) + 1
         }
       }
 
-      options = [
-        { label: 'A', text: String(p.A), isCorrect: p.correctLabel === 'A' },
-        { label: 'B', text: String(p.B), isCorrect: p.correctLabel === 'B' },
-        { label: 'C', text: String(p.C), isCorrect: p.correctLabel === 'C' },
-        { label: 'D', text: String(p.D), isCorrect: p.correctLabel === 'D' },
-      ]
-      // Opsi E opsional: hanya dibuat jika diisi
-      if (p.E && String(p.E).trim() !== '') {
-        options.push({ label: 'E', text: String(p.E), isCorrect: p.correctLabel === 'E' })
-      }
-    }
+      type Opt = { label: string; text: string; isCorrect?: boolean }
 
+      const type = p.type
+      let options: Opt[] = []
+      let settings: Record<string, any> | undefined = undefined
 
-    if (type === 'MULTI_SELECT') {
-      const labels4: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
-      for (const L of labels4) {
-        const text = (p as any)[L]
-        if (!text || String(text).trim() === '') {
-          throw new Error(`Opsi ${L} wajib diisi untuk tipe Multi Select`)
+      if (type === 'SINGLE_CHOICE') {
+        const labels4: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
+        for (const L of labels4) {
+          const text = (p as any)[L]
+          if (!text || String(text).trim() === '') {
+            throw new Error(`Opsi ${L} wajib diisi untuk tipe Single Choice`)
+          }
+        }
+        if (!p.correctLabel) throw new Error('Pilih jawaban benar (Single Choice)')
+
+        // validasi jika correctLabel = 'E', pastikan E terisi
+        if (p.correctLabel === 'E') {
+          if (!p.E || String(p.E).trim() === '') {
+            throw new Error('Opsi E dipilih sebagai jawaban benar, tetapi kosong')
+          }
+        }
+
+        options = [
+          { label: 'A', text: String(p.A), isCorrect: p.correctLabel === 'A' },
+          { label: 'B', text: String(p.B), isCorrect: p.correctLabel === 'B' },
+          { label: 'C', text: String(p.C), isCorrect: p.correctLabel === 'C' },
+          { label: 'D', text: String(p.D), isCorrect: p.correctLabel === 'D' },
+        ]
+        // Opsi E opsional: hanya dibuat jika diisi
+        if (p.E && String(p.E).trim() !== '') {
+          options.push({ label: 'E', text: String(p.E), isCorrect: p.correctLabel === 'E' })
         }
       }
-      if (correctMulti.length === 0) throw new Error('Pilih minimal satu jawaban benar (Multi Select)')
 
-      // jika E dicentang sebagai benar, pastikan E terisi
-      if (correctMulti.includes('E') && (!p.E || String(p.E).trim() === '')) {
-        throw new Error('Opsi E ditandai benar, tetapi kosong')
+
+      if (type === 'MULTI_SELECT') {
+        const labels4: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
+        for (const L of labels4) {
+          const text = (p as any)[L]
+          if (!text || String(text).trim() === '') {
+            throw new Error(`Opsi ${L} wajib diisi untuk tipe Multi Select`)
+          }
+        }
+        if (correctMulti.length === 0) throw new Error('Pilih minimal satu jawaban benar (Multi Select)')
+
+        // jika E dicentang sebagai benar, pastikan E terisi
+        if (correctMulti.includes('E') && (!p.E || String(p.E).trim() === '')) {
+          throw new Error('Opsi E ditandai benar, tetapi kosong')
+        }
+
+        options = [
+          { label: 'A', text: String(p.A), isCorrect: correctMulti.includes('A') },
+          { label: 'B', text: String(p.B), isCorrect: correctMulti.includes('B') },
+          { label: 'C', text: String(p.C), isCorrect: correctMulti.includes('C') },
+          { label: 'D', text: String(p.D), isCorrect: correctMulti.includes('D') },
+        ]
+        if (p.E && String(p.E).trim() !== '') {
+          options.push({ label: 'E', text: String(p.E), isCorrect: correctMulti.includes('E') })
+        }
       }
 
-      options = [
-        { label: 'A', text: String(p.A), isCorrect: correctMulti.includes('A') },
-        { label: 'B', text: String(p.B), isCorrect: correctMulti.includes('B') },
-        { label: 'C', text: String(p.C), isCorrect: correctMulti.includes('C') },
-        { label: 'D', text: String(p.D), isCorrect: correctMulti.includes('D') },
-      ]
-      if (p.E && String(p.E).trim() !== '') {
-        options.push({ label: 'E', text: String(p.E), isCorrect: correctMulti.includes('E') })
+
+      if (type === 'TRUE_FALSE') {
+        const tTrue = (p.tfTrueText ?? 'Benar').toString()
+        const tFalse = (p.tfFalseText ?? 'Salah').toString()
+        if (!p.correctTF) throw new Error('Pilih jawaban benar (True/False)')
+        options = [
+          { label: 'A', text: tTrue, isCorrect: p.correctTF === 'TRUE' },
+          { label: 'B', text: tFalse, isCorrect: p.correctTF === 'FALSE' },
+        ]
       }
+
+      if (type === 'NUMBER') {
+        const tolerance = p.tolerance === '' || p.tolerance === undefined ? undefined : Number(p.tolerance)
+        const target = p.targetNumber === '' || p.targetNumber === undefined ? undefined : Number(p.targetNumber)
+        settings = { tolerance, target }
+      }
+
+      if (type === 'RANGE') {
+        const min = p.min === '' || p.min === undefined ? undefined : Number(p.min)
+        const max = p.max === '' || p.max === undefined ? undefined : Number(p.max)
+        const step = p.step === '' || p.step === undefined ? undefined : Number(p.step)
+        if (min == null || max == null) throw new Error('Range: min dan max wajib diisi')
+        if (Number(min) >= Number(max)) throw new Error('Range: min harus < max')
+        settings = { min: Number(min), max: Number(max), step: step ?? null }
+      }
+
+      if (type === 'SHORT_TEXT') {
+        const caseSensitive = !!p.caseSensitive
+        const maxLength = p.maxLength === '' || p.maxLength === undefined ? undefined : Number(p.maxLength)
+        settings = { caseSensitive, maxLength }
+      }
+
+      if (type === 'ESSAY') {
+        const caseSensitive = !!p.caseSensitive
+        const maxLength = p.maxLength === '' || p.maxLength === undefined ? undefined : Number(p.maxLength)
+        settings = { caseSensitive, maxLength }
+      }
+
+      await prisma.question.create({
+        data: {
+          examPackageId: id,
+          order: safeOrder,
+          text: p.text,
+          imageUrl,
+          // @ts-ignore
+          audioUrl,
+          type,
+          contextText: p.contextText ? String(p.contextText) : undefined,
+          passageId: p.passageId ? String(p.passageId) : undefined,
+          points: p.points ?? 1,
+          required: p.required ?? false,
+          settings: settings ?? undefined,
+          ...(options.length
+            ? { options: { create: options.map(o => ({ label: o.label, text: o.text, isCorrect: !!o.isCorrect })) } }
+            : {}),
+        },
+      })
+    } catch (e: any) {
+      console.error(e)
+      return { error: 'Gagal membuat soal: ' + e.message }
     }
-
-
-    if (type === 'TRUE_FALSE') {
-      const tTrue = (p.tfTrueText ?? 'Benar').toString()
-      const tFalse = (p.tfFalseText ?? 'Salah').toString()
-      if (!p.correctTF) throw new Error('Pilih jawaban benar (True/False)')
-      options = [
-        { label: 'A', text: tTrue, isCorrect: p.correctTF === 'TRUE' },
-        { label: 'B', text: tFalse, isCorrect: p.correctTF === 'FALSE' },
-      ]
-    }
-
-    if (type === 'NUMBER') {
-      const tolerance = p.tolerance === '' || p.tolerance === undefined ? undefined : Number(p.tolerance)
-      const target = p.targetNumber === '' || p.targetNumber === undefined ? undefined : Number(p.targetNumber)
-      settings = { tolerance, target }
-    }
-
-    if (type === 'RANGE') {
-      const min = p.min === '' || p.min === undefined ? undefined : Number(p.min)
-      const max = p.max === '' || p.max === undefined ? undefined : Number(p.max)
-      const step = p.step === '' || p.step === undefined ? undefined : Number(p.step)
-      if (min == null || max == null) throw new Error('Range: min dan max wajib diisi')
-      if (Number(min) >= Number(max)) throw new Error('Range: min harus < max')
-      settings = { min: Number(min), max: Number(max), step: step ?? null }
-    }
-
-    if (type === 'SHORT_TEXT') {
-      const caseSensitive = !!p.caseSensitive
-      const maxLength = p.maxLength === '' || p.maxLength === undefined ? undefined : Number(p.maxLength)
-      settings = { caseSensitive, maxLength }
-    }
-
-    if (type === 'ESSAY') {
-      const caseSensitive = !!p.caseSensitive
-      const maxLength = p.maxLength === '' || p.maxLength === undefined ? undefined : Number(p.maxLength)
-      settings = { caseSensitive, maxLength }
-    }
-
-    await prisma.question.create({
-      data: {
-        examPackageId: id,
-        order: safeOrder,
-        text: p.text,
-        imageUrl,
-        // @ts-ignore
-        audioUrl,
-        type,
-        contextText: p.contextText ? String(p.contextText) : undefined,
-        passageId: p.passageId ? String(p.passageId) : undefined,
-        points: p.points ?? 1,
-        required: p.required ?? false,
-        settings: settings ?? undefined,
-        ...(options.length
-          ? { options: { create: options.map(o => ({ label: o.label, text: o.text, isCorrect: !!o.isCorrect })) } }
-          : {}),
-      },
-    })
 
     revalidatePath(`/admin/packages/${id}`)
+    return { success: true }
   }
 
   // ===== UPDATE =====
@@ -413,9 +430,20 @@ export default async function EditPackagePage(
 
     const q = await prisma.question.findUnique({
       where: { id: String(p.id) },
-      include: { options: true }
+      include: {
+        options: true,
+        _count: { select: { answers: true } } // Cek apakah sudah ada yang jawab
+      }
     })
     if (!q) throw new Error('Soal tidak ditemukan')
+
+    // 🛡️ PROTEKSI: Jangan izinkan ganti Tipe jika sudah ada attempt (jawaban)
+    // Karena ganti tipe akan menghapus opsi lama (cascade/manual delete) dan bikin jawaban siswa jadi invalid
+    if (q.type !== p.type && q._count.answers > 0) {
+      throw new Error(
+        `Tidak bisa mengubah Tipe Soal karena sudah ada ${q._count.answers} jawaban siswa yang tersimpan. Hapus jawaban siswa dulu atau buat soal baru.`
+      )
+    }
 
     let safeOrder = Number(p.order)
     if (!Number.isFinite(safeOrder) || safeOrder <= 0) {
@@ -696,14 +724,15 @@ export default async function EditPackagePage(
 
 
   // UI helpers
+  // UI helpers
   const inputCls =
-    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+    'w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
   const fileCls =
-    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2.5 file:text-white file:font-semibold hover:file:bg-indigo-700'
-  const cardCls = 'rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200'
+    'w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2.5 file:text-white file:font-semibold hover:file:bg-indigo-700'
+  const cardCls = 'rounded-xl bg-white dark:bg-slate-900 p-6 shadow-sm ring-1 ring-slate-200 dark:ring-slate-800'
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-20">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20">
       <section className="mx-auto max-w-6xl space-y-8 px-6 py-8">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -716,7 +745,7 @@ export default async function EditPackagePage(
               Kembali ke Daftar Paket
             </Link>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
                 Kelola Soal: {pkg.title}
               </h1>
               <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">
@@ -732,7 +761,7 @@ export default async function EditPackagePage(
           <div className="flex gap-2">
             <Link
               href={`/admin/packages/${id}/results`}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               <LayoutList className="h-4 w-4" />
               Lihat Hasil
@@ -748,34 +777,34 @@ export default async function EditPackagePage(
         </div>
 
         {/* === FILTER & SEARCH === */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
           <QuestionFilter initialQuery={query} initialType={typeFilter} />
 
           <details className="relative z-10">
             <summary className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 cursor-pointer list-none">
               <Plus className="h-4 w-4" /> Tambah Section / Passage
             </summary>
-            <div className="absolute right-0 mt-2 w-[500px] max-w-[90vw] p-5 rounded-xl border border-indigo-100 bg-white shadow-xl">
-              <h3 className="font-bold text-slate-900 mb-3 block">Buat Section Baru</h3>
-              <form action={createPassage} className="space-y-4">
+            <div className="absolute right-0 mt-2 w-[500px] max-w-[90vw] p-5 rounded-xl border border-indigo-100 dark:border-indigo-900 bg-white dark:bg-slate-900 shadow-xl">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-3 block">Buat Section Baru</h3>
+              <ClientActionForm action={createPassage} className="space-y-4" successMessage="Section berhasil dibuat">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Judul Section</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Judul Section</label>
                   <input name="title" placeholder="e.g. Reading Section 1" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Urutan</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Urutan</label>
                   <input name="order" type="number" placeholder="1" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Konten Teks</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Konten Teks</label>
                   <textarea name="content" rows={4} className={inputCls} placeholder="Isi bacaan..." />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Audio (Opsional)</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Audio (Opsional)</label>
                   <input type="file" name="audio" className={fileCls} />
                 </div>
                 <button className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-bold text-white hover:bg-indigo-700">Simpan Section</button>
-              </form>
+              </ClientActionForm>
             </div>
           </details>
         </div>
@@ -792,21 +821,21 @@ export default async function EditPackagePage(
             // But simpler is to just render.
 
             return (
-              <section key={p.id} className="rounded-2xl border border-indigo-100 bg-white shadow-sm ring-1 ring-indigo-50/50 overflow-hidden">
+              <section key={p.id} className="rounded-2xl border border-indigo-100 dark:border-indigo-900/50 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-indigo-50/50 dark:ring-indigo-900/10 overflow-hidden">
                 {/* Section Header */}
-                <div className="border-b border-indigo-50 bg-indigo-50/30 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="border-b border-indigo-50 dark:border-indigo-900/30 bg-indigo-50/30 dark:bg-indigo-900/10 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm border border-indigo-100">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-100 dark:border-indigo-900/50">
                       {/* @ts-ignore */}
                       {p.audioUrl ? <div className="font-bold text-xs">MP3</div> : <FileText className="h-6 w-6" />}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-slate-900">{p.title || 'Untitled Section'}</h3>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">{p.title || 'Untitled Section'}</h3>
                         {/* @ts-ignore */}
-                        <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">#{p.order}</span>
+                        <span className="rounded bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">#{p.order}</span>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
+                      <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mt-1">
                         <span>{sectionQuestions.length} Soal</span>
                         {/* @ts-ignore */}
                         {(p as any).audioUrl && <span className="flex items-center gap-1 text-emerald-600 font-medium"><div className="h-2 w-2 rounded-full bg-emerald-500" /> Audio Enabled</span>}
@@ -817,24 +846,24 @@ export default async function EditPackagePage(
                   {/* Section Actions */}
                   <div className="flex gap-2">
                     <details className="relative">
-                      <summary className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer list-none shadow-sm">
+                      <summary className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer list-none shadow-sm">
                         <Edit2 className="h-3 w-3" /> Edit Section
                       </summary>
                       {/* Edit Passage Form Overlay */}
-                      <div className="absolute right-0 top-full z-20 mt-2 w-[400px] max-w-[85vw] rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
-                        <h4 className="font-bold mb-3">Edit Section</h4>
-                        <form action={updatePassage} className="space-y-3">
+                      <div className="absolute right-0 top-full z-20 mt-2 w-[400px] max-w-[85vw] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-xl">
+                        <h4 className="font-bold mb-3 text-slate-900 dark:text-white">Edit Section</h4>
+                        <ClientActionForm action={updatePassage} className="space-y-3" successMessage="Section updated">
                           <input type="hidden" name="id" value={p.id} />
-                          <div><label className="text-xs font-bold text-slate-500">Judul</label><input name="title" defaultValue={p.title ?? ''} className={inputCls} /></div>
-                          <div><label className="text-xs font-bold text-slate-500">Urutan</label><input name="order" type="number" defaultValue={(p as any).order ?? 0} className={inputCls} /></div>
-                          <div><label className="text-xs font-bold text-slate-500">Konten</label><textarea name="content" defaultValue={(p as any).content} rows={3} className={inputCls} /></div>
-                          <div><label className="text-xs font-bold text-slate-500">Update Audio</label><input type="file" name="audio" className={fileCls} /></div>
+                          <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400">Judul</label><input name="title" defaultValue={p.title ?? ''} className={inputCls} /></div>
+                          <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400">Urutan</label><input name="order" type="number" defaultValue={(p as any).order ?? 0} className={inputCls} /></div>
+                          <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400">Konten</label><textarea name="content" defaultValue={(p as any).content} rows={3} className={inputCls} /></div>
+                          <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400">Update Audio</label><input type="file" name="audio" className={fileCls} /></div>
                           <div className="pt-2"><button className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-bold text-white">Simpan Perubahan</button></div>
-                        </form>
+                        </ClientActionForm>
                       </div>
                     </details>
                     <ConfirmDeleteForm action={deletePassage} id={p.id} confirmationMessage="Hapus section ini? Soal di dalamnya akan menjadi orphaned (tanpa section).">
-                      <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 shadow-sm">
+                      <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-900/20 px-3 text-xs font-semibold text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 shadow-sm">
                         <Trash2 className="h-3 w-3" />
                       </button>
                     </ConfirmDeleteForm>
@@ -842,49 +871,49 @@ export default async function EditPackagePage(
                 </div>
 
                 {/* Section Content Preview */}
-                <div className="bg-slate-50/50 p-5 text-sm text-slate-600 border-b border-slate-100">
+                <div className="bg-slate-50/50 dark:bg-slate-900/50 p-5 text-sm text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800">
                   <details className="group">
-                    <summary className="cursor-pointer font-medium text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1">Lihat Konten Passage <ChevronDown className="h-4 w-4 group-open:rotate-180 transition-transform" /></summary>
-                    <div className="mt-3 bg-white p-4 rounded-xl border border-slate-200 font-serif leading-relaxed whitespace-pre-wrap">{(p as any).content}</div>
+                    <summary className="cursor-pointer font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 inline-flex items-center gap-1">Lihat Konten Passage <ChevronDown className="h-4 w-4 group-open:rotate-180 transition-transform" /></summary>
+                    <div className="mt-3 bg-white dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 font-serif leading-relaxed whitespace-pre-wrap">{(p as any).content}</div>
                     {/* @ts-ignore */}
                     {(p as any).audioUrl && <div className="mt-3"><audio controls src={(p as any).audioUrl} className="w-full h-8" /></div>}
                   </details>
                 </div>
 
                 {/* Questions in this Section */}
-                <div className="p-5 bg-slate-50/30">
+                <div className="p-5 bg-slate-50/30 dark:bg-slate-950/30">
                   <div className="space-y-4">
                     {sectionQuestions.map(q => (
-                      <div key={q.id} className="group relative rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all">
+                      <div key={q.id} className="group relative rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all">
                         {/* Question Item Render (Simplified Reuse) */}
                         <div className="flex gap-4">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 font-bold text-slate-600 text-sm">{q.order}</div>
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-400 text-sm">{q.order}</div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{q.type}</span>
-                              <span className="text-xs font-medium text-slate-400">{q.points} Poin</span>
+                              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{q.type}</span>
+                              <span className="text-xs font-medium text-slate-400 dark:text-slate-500">{q.points} Poin</span>
                             </div>
-                            <p className="text-sm font-medium text-slate-900 line-clamp-2">{q.text}</p>
+                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 line-clamp-2">{q.text}</p>
                           </div>
                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             {/* Just Edit/Delete Buttons for Question */}
                             <details className="relative">
-                              <summary className="list-none inline-flex p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-white hover:text-indigo-600 border border-transparent hover:border-slate-200 cursor-pointer"><Edit2 className="h-4 w-4" /></summary>
-                              <div className="absolute right-0 z-10 mt-2 w-[400px] bg-white p-5 rounded-xl shadow-xl border border-slate-100">
-                                <h4 className="font-bold mb-4">Edit Soal {q.order}</h4>
-                                <form action={updateQuestion} className="space-y-3">
+                              <summary className="list-none inline-flex p-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-indigo-600 dark:hover:text-indigo-400 border border-transparent hover:border-slate-200 dark:hover:border-slate-600 cursor-pointer"><Edit2 className="h-4 w-4" /></summary>
+                              <div className="absolute right-0 z-10 mt-2 w-[400px] bg-white dark:bg-slate-900 p-5 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800">
+                                <h4 className="font-bold mb-4 text-slate-900 dark:text-white">Edit Soal {q.order}</h4>
+                                <ClientActionForm action={updateQuestion} className="space-y-3" successMessage="Soal updated">
                                   <input type="hidden" name="id" value={q.id} />
                                   <input type="hidden" name="type" value={q.type} />
                                   <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs font-bold">Urutan</label><input name="order" defaultValue={q.order} className={inputCls} /></div>
-                                    <div><label className="text-xs font-bold">Poin</label><input name="points" defaultValue={q.points} className={inputCls} /></div>
+                                    <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400">Urutan</label><input name="order" defaultValue={q.order} className={inputCls} /></div>
+                                    <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400">Poin</label><input name="points" defaultValue={q.points} className={inputCls} /></div>
                                   </div>
-                                  <div><label className="text-xs font-bold">Pertanyaan</label><textarea name="text" defaultValue={q.text} rows={2} className={inputCls} /></div>
+                                  <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400">Pertanyaan</label><textarea name="text" defaultValue={q.text} rows={2} className={inputCls} /></div>
                                   <div className="flex justify-end pt-2"><button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-white text-xs font-bold">Simpan</button></div>
-                                </form>
+                                </ClientActionForm>
                               </div>
                             </details>
-                            <ConfirmDeleteForm action={deleteQuestion} id={q.id} confirmationMessage="Hapus soal ini?"><button className="inline-flex p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"><Trash2 className="h-4 w-4" /></button></ConfirmDeleteForm>
+                            <ConfirmDeleteForm action={deleteQuestion} id={q.id} confirmationMessage="Hapus soal ini?"><button className="inline-flex p-2 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40"><Trash2 className="h-4 w-4" /></button></ConfirmDeleteForm>
                           </div>
                         </div>
                       </div>
@@ -893,71 +922,19 @@ export default async function EditPackagePage(
                   </div>
 
                   {/* Add Question to Section Button */}
-                  <div className="mt-4 pt-4 border-t border-slate-200/50">
+                  <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
                     <details className="group add-q">
-                      <summary className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/30 text-indigo-600 font-semibold text-sm hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer list-none transition-colors">
+                      <summary className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-dashed border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 font-semibold text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-300 dark:hover:border-indigo-700 cursor-pointer list-none transition-colors">
                         <Plus className="h-4 w-4" /> Tambah Soal di Section ini
                       </summary>
-                      <div className="mt-4 bg-white rounded-xl border border-indigo-100 shadow-lg p-6">
+                      <div className="mt-4 bg-white dark:bg-slate-900 rounded-xl border border-indigo-100 dark:border-indigo-900 shadow-lg p-6">
                         {/* REUSE CREATE FORM BUT PRESET passageId */}
-                        <h4 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2">Tambah Soal ke: {p.title}</h4>
-                        <form action={addQuestion} className="space-y-6">
-                          <input type="hidden" name="passageId" value={p.id} />
-
-                          {/* DENSITY FIX: Grid for Types */}
-                          <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Pilih Tipe Soal</label>
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                              {[
-                                { id: 'SINGLE_CHOICE', l: 'PG', i: <CheckSquare className="h-4 w-4" /> },
-                                { id: 'MULTI_SELECT', l: 'Multi', i: <ListChecks className="h-4 w-4" /> },
-                                { id: 'TRUE_FALSE', l: 'T/F', i: <ToggleLeft className="h-4 w-4" /> },
-                                { id: 'SHORT_TEXT', l: 'Isian', i: <Type className="h-4 w-4" /> },
-                                { id: 'ESSAY', l: 'Essay', i: <AlignLeft className="h-4 w-4" /> },
-                                { id: 'NUMBER', l: 'Angka', i: <Hash className="h-4 w-4" /> },
-                                { id: 'RANGE', l: 'Skala', i: <SlidersHorizontal className="h-4 w-4" /> },
-                              ].map(t => (
-                                <label key={t.id} className="cursor-pointer relative group">
-                                  <input type="radio" name="type" value={t.id} className="peer sr-only" defaultChecked={t.id === 'SINGLE_CHOICE'} />
-                                  <div className="flex flex-col items-center gap-1 p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600 transition-all">
-                                    {t.i}
-                                    <span className="text-[10px] font-bold text-center leading-tight">{t.l}</span>
-                                  </div>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Basic Fields Grid */}
-                          <div className="grid sm:grid-cols-2 gap-4">
-                            <div><label className="text-xs font-bold text-slate-500">Urutan</label><input name="order" className={inputCls} placeholder="Auto" /></div>
-                            <div><label className="text-xs font-bold text-slate-500">Poin</label><input name="points" type="number" defaultValue={1} className={inputCls} /></div>
-                            <div className="sm:col-span-2"><label className="text-xs font-bold text-slate-500">Pertanyaan</label><textarea name="text" rows={2} className={inputCls} required /></div>
-
-                            {/* Audio/Image for Question */}
-                            <div><label className="text-xs font-bold text-slate-500">Gambar (Opsional)</label><input type="file" name="image" className={fileCls} /></div>
-                            <div><label className="text-xs font-bold text-slate-500">Audio (Opsional)</label><input type="file" name="audio" className={fileCls} /></div>
-                          </div>
-
-                          {/* Options (Simplified Render) */}
-                          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                            <p className="text-xs font-semibold text-slate-500 mb-3">Opsi Jawaban (Isi sesuai tipe)</p>
-                            <div className="space-y-3">
-                              {['A', 'B', 'C', 'D'].map(l => (
-                                <div key={l} className="flex gap-2">
-                                  <span className="flex h-9 w-9 items-center justify-center rounded bg-white border font-bold text-slate-500 text-xs">{l}</span>
-                                  <input name={l} placeholder={`Opsi ${l}`} className={inputCls} />
-                                  <label className="flex items-center px-2 cursor-pointer"><input type="radio" name="correctLabel" value={l} title="Correct (Single)" /></label>
-                                  <label className="flex items-center px-2 cursor-pointer"><input type="checkbox" name="correctMulti" value={l} title="Correct (Multi)" /></label>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end">
-                            <button className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow hover:bg-indigo-700">Simpan Soal</button>
-                          </div>
-                        </form>
+                        <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-4 border-b dark:border-slate-800 pb-2">Tambah Soal ke: {p.title}</h4>
+                        <DynamicQuestionForm
+                          action={addQuestion}
+                          passageId={p.id}
+                          successMessage="Soal berhasil ditambahkan"
+                        />
                       </div>
                     </details>
                   </div>
@@ -968,20 +945,20 @@ export default async function EditPackagePage(
 
           {/* 2. Orphaned Questions */}
           {filteredQuestions.filter(q => !q.passageId).length > 0 && (
-            <section className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-6">
-              <h3 className="font-bold text-slate-700 text-lg mb-4 flex items-center gap-2"><LayoutList className="h-5 w-5" /> Soal Tanpa Section</h3>
+            <section className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-6">
+              <h3 className="font-bold text-slate-700 dark:text-slate-300 text-lg mb-4 flex items-center gap-2"><LayoutList className="h-5 w-5" /> Soal Tanpa Section</h3>
               <div className="grid gap-4">
                 {filteredQuestions.filter(q => !q.passageId).map(q => (
-                  <div key={q.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex gap-4">
-                    <div className="font-bold text-slate-500">#{q.order}</div>
+                  <div key={q.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex gap-4">
+                    <div className="font-bold text-slate-500 dark:text-slate-400">#{q.order}</div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium">{q.text}</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">{q.text}</p>
                       <div className="mt-2 flex gap-2">
-                        <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">{q.type}</span>
+                        <span className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-600 dark:text-slate-400">{q.type}</span>
                       </div>
                     </div>
                     <ConfirmDeleteForm action={deleteQuestion} id={q.id} confirmationMessage="Hapus soal?">
-                      <button className="text-rose-500 hover:bg-rose-50 p-2 rounded"><Trash2 className="h-4 w-4" /></button>
+                      <button className="text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 p-2 rounded"><Trash2 className="h-4 w-4" /></button>
                     </ConfirmDeleteForm>
                   </div>
                 ))}
@@ -989,43 +966,15 @@ export default async function EditPackagePage(
               <div className="mt-6">
                 {/* Add Standalone Question Button logic similar to above but passageId=null */}
                 <details className="group">
-                  <summary className="inline-flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-300 cursor-pointer list-none">
+                  <summary className="inline-flex items-center gap-2 rounded-lg bg-slate-200 dark:bg-slate-700 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 cursor-pointer list-none">
                     <Plus className="h-4 w-4" /> Tambah Soal Standalone
                   </summary>
-                  <div className="mt-4 bg-white p-6 rounded-xl border border-slate-300 shadow-lg">
-                    <h4 className="font-bold mb-4">Tambah Soal Standalone</h4>
-                    <form action={addQuestion} className="space-y-4">
-                      {/* Same fields but passageId hidden/empty */}
-                      <input type="hidden" name="passageId" value="" />
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Pilih Tipe Soal</label>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                          {[
-                            { id: 'SINGLE_CHOICE', l: 'PG', i: <CheckSquare className="h-4 w-4" /> },
-                            { id: 'MULTI_SELECT', l: 'Multi', i: <ListChecks className="h-4 w-4" /> },
-                            { id: 'TRUE_FALSE', l: 'T/F', i: <ToggleLeft className="h-4 w-4" /> },
-                            { id: 'SHORT_TEXT', l: 'Isian', i: <Type className="h-4 w-4" /> },
-                            { id: 'ESSAY', l: 'Essay', i: <AlignLeft className="h-4 w-4" /> },
-                            { id: 'NUMBER', l: 'Angka', i: <Hash className="h-4 w-4" /> },
-                            { id: 'RANGE', l: 'Skala', i: <SlidersHorizontal className="h-4 w-4" /> },
-                          ].map(t => (
-                            <label key={t.id} className="cursor-pointer relative group">
-                              <input type="radio" name="type" value={t.id} className="peer sr-only" defaultChecked={t.id === 'SINGLE_CHOICE'} />
-                              <div className="flex flex-col items-center gap-1 p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600 transition-all">
-                                {t.i}
-                                <span className="text-[10px] font-bold text-center leading-tight">{t.l}</span>
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-4">
-                        <div><label className="text-xs font-bold text-slate-500">Urutan</label><input name="order" className={inputCls} placeholder="Auto" /></div>
-                        <div><label className="text-xs font-bold text-slate-500">Poin</label><input name="points" type="number" defaultValue={1} className={inputCls} /></div>
-                        <div className="sm:col-span-2"><label className="text-xs font-bold text-slate-500">Pertanyaan</label><textarea name="text" rows={2} className={inputCls} required /></div>
-                      </div>
-                      <div className="flex justify-end pt-2"><button className="rounded-lg bg-indigo-600 px-4 py-2 text-white font-bold text-sm">Simpan</button></div>
-                    </form>
+                  <div className="mt-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-300 dark:border-slate-700 shadow-lg">
+                    <DynamicQuestionForm
+                      action={addQuestion}
+                      passageId=""
+                      successMessage="Soal standalone berhasil ditambahkan"
+                    />
                   </div>
                 </details>
               </div>

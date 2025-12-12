@@ -80,11 +80,11 @@ export default async function PackageSettingsPage(
 
   // UI helpers
   const inputCls =
-    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
-  const cardCls = 'rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200'
+    'w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+  const cardCls = 'rounded-xl bg-white dark:bg-slate-900 p-6 shadow-sm ring-1 ring-slate-200 dark:ring-slate-800'
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-20">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20">
       <section className="mx-auto max-w-5xl px-6 py-8 space-y-8">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -96,18 +96,18 @@ export default async function PackageSettingsPage(
               <ArrowLeft className="h-4 w-4" />
               Kembali ke Daftar Paket
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Pengaturan Paket
             </h1>
-            <p className="text-sm text-slate-600">
-              Konfigurasi detail untuk paket <span className="font-semibold text-slate-900">{pkg.title}</span>.
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Konfigurasi detail untuk paket <span className="font-semibold text-slate-900 dark:text-white">{pkg.title}</span>.
             </p>
           </div>
 
           <div className="flex gap-2">
             <Link
               href={`/admin/packages/${id}`}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               Kelola Soal
             </Link>
@@ -122,14 +122,14 @@ export default async function PackageSettingsPage(
               <Save className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-slate-900">Edit Informasi Paket</h2>
-              <p className="text-xs text-slate-500">Perbarui judul, deskripsi, dan pengaturan lainnya.</p>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Edit Informasi Paket</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Perbarui judul, deskripsi, dan pengaturan lainnya.</p>
             </div>
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Judul Paket</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Judul Paket</label>
               <input
                 name="title"
                 defaultValue={pkg.title}
@@ -139,7 +139,7 @@ export default async function PackageSettingsPage(
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Batas Waktu (Menit)</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Batas Waktu (Menit)</label>
               <input
                 name="timeLimitMin"
                 type="number"
@@ -153,7 +153,7 @@ export default async function PackageSettingsPage(
             </div>
 
             <div className="sm:col-span-2 space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Deskripsi (Opsional)</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Deskripsi (Opsional)</label>
               <textarea
                 name="description"
                 defaultValue={pkg.description ?? ''}
@@ -164,7 +164,7 @@ export default async function PackageSettingsPage(
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Status Publikasi</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Status Publikasi</label>
               <div className="relative">
                 <select
                   name="isActive"
@@ -182,7 +182,7 @@ export default async function PackageSettingsPage(
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Ganti Token Akses</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Ganti Token Akses</label>
               <input
                 name="newToken"
                 placeholder="Masukkan token baru..."
@@ -204,7 +204,7 @@ export default async function PackageSettingsPage(
         </form>
 
         {/* Danger Zone */}
-        <div className="rounded-xl border border-red-200 bg-red-50/50 p-6">
+        <div className="rounded-xl border border-red-200 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10 p-6">
           <div className="flex items-start gap-4">
             <div className="flex-shrink-0">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600">
@@ -212,8 +212,8 @@ export default async function PackageSettingsPage(
               </div>
             </div>
             <div className="flex-1">
-              <h3 className="text-base font-semibold text-red-900">Hapus Paket</h3>
-              <p className="mt-1 text-sm text-red-600/80">
+              <h3 className="text-base font-semibold text-red-900 dark:text-red-400">Hapus Paket</h3>
+              <p className="mt-1 text-sm text-red-600/80 dark:text-red-300/80">
                 Menghapus paket akan menghapus semua soal, opsi jawaban, dan riwayat pengerjaan siswa secara permanen. Tindakan ini tidak dapat dibatalkan.
               </p>
 
@@ -222,7 +222,7 @@ export default async function PackageSettingsPage(
                   <input
                     name="confirm"
                     placeholder='Ketik "DELETE" untuk konfirmasi'
-                    className="block w-full rounded-lg border-red-300 bg-white p-2.5 text-sm text-red-900 placeholder-red-300 focus:border-red-500 focus:ring-red-500"
+                    className="block w-full rounded-lg border-red-300 dark:border-red-800 bg-white dark:bg-red-950/30 p-2.5 text-sm text-red-900 dark:text-red-200 placeholder-red-300 dark:placeholder-red-700 focus:border-red-500 focus:ring-red-500"
                   />
                 </div>
 

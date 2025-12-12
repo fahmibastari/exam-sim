@@ -135,14 +135,37 @@ export function evaluateSubmission(
       const allMatch =
         truePos === correctIds.size && falsePos === 0 && pickedIds.size === correctIds.size
 
+      // Update Scoring untuk mencegah "Select All" exploit
+      // Logic: (BenarTerpilih - SalahTerpilih) / TotalBenar * PoinMax
+      // Jika hasil negatif, skor 0.
+
       let score = 0
-      if (allowPartial && correctIds.size > 0) {
-        const portion = truePos / correctIds.size
-        score = portion * max - wrongPenalty * falsePos * max
+
+      const wrongSelected = falsePos
+      const rightSelected = truePos
+      const totalRight = correctIds.size
+
+      if (totalRight === 0) {
+        // Soal invalid (tidak ada kunci jawaban benar), anggap 0 atau max? 
+        // Aman 0 untuk mencegah error
+        score = 0
       } else {
-        score = allMatch ? max : 0
+        // Formula: Score = Max * ( (RightSelected - WrongSelected) / TotalRight )
+        // Contoh: Max 10. Kunci A,B. Siswa pilih A,B,C.
+        // RightSelected=2, WrongSelected=1. TotalRight=2.
+        // Score = 10 * ( (2 - 1) / 2 ) = 10 * 0.5 = 5.
+        // Contoh: Pilih A,B,C,D,E (semua 5). Kunci A,B.
+        // Right=2, Wrong=3. TotalRight=2.
+        // Score = 10 * ( (2 - 3) / 2 ) = -5 -> 0.
+
+        const rawFraction = (rightSelected - wrongSelected) / totalRight
+        score = Math.max(0, rawFraction * max)
       }
-      score = clamp(score, 0, max)
+
+      // Jika strict match diminta (allMatch only):
+      // score = allMatch ? max : 0
+
+      // Kita pakai logic fractional dengan penalti (lebih adil tapi strict terhadap ngasal)
 
       byQuestion.push({
         questionId: q.id,
@@ -202,8 +225,8 @@ export function evaluateSubmission(
         typeof ans === 'number'
           ? ans
           : typeof ans === 'string' && ans.trim() !== ''
-          ? Number(ans)
-          : NaN
+            ? Number(ans)
+            : NaN
       const isCorrect = Number.isFinite(val) && Math.abs(val - target) <= Math.max(0, tol)
       byQuestion.push({
         questionId: q.id,

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Package, LogOut } from 'lucide-react'
 import { signOut } from 'next-auth/react'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 export default function AdminNav() {
   const pathname = usePathname()
@@ -15,7 +16,7 @@ export default function AdminNav() {
   ]
 
   return (
-    <div className="border-b border-slate-200 bg-white">
+    <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
       <div className="mx-auto max-w-7xl px-6 lg:px-8 flex items-center justify-between">
         <div className="flex space-x-8">
           {tabs.map((tab) => {
@@ -39,13 +40,16 @@ export default function AdminNav() {
           })}
         </div>
 
-        <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
-          className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-rose-600 transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          Keluar
-        </button>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-rose-600 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-rose-400 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Keluar
+          </button>
+        </div>
       </div>
     </div>
   )

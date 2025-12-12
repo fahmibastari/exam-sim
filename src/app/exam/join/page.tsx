@@ -100,22 +100,22 @@ export default function JoinExamPage() {
   }
 
   const inputCls =
-    'block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+    'block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
 
   return (
-    <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center p-6 bg-slate-50">
-      <div className="w-full max-w-xl rounded-2xl bg-white p-8 shadow-xl ring-1 ring-slate-900/5">
+    <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center p-6 bg-slate-50 dark:bg-slate-950 transition-colors">
+      <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-xl ring-1 ring-slate-900/5 dark:ring-slate-100/10 transition-all">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gabung Ujian</h1>
-          <p className="mt-2 text-sm text-slate-600">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Gabung Ujian</h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
             Pilih paket, masukkan token, dan isi data diri dengan benar.
           </p>
         </div>
 
         {pkgs.length === 0 ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-700">
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 p-6 text-center text-sm text-slate-700 dark:text-slate-300">
             <p className="font-medium">Belum ada paket aktif yang tersedia.</p>
-            <p className="mt-1 text-slate-500">Silakan hubungi pengawas ujian Anda.</p>
+            <p className="mt-1 text-slate-500 dark:text-slate-400">Silakan hubungi pengawas ujian Anda.</p>
           </div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-6" noValidate>
@@ -123,7 +123,7 @@ export default function JoinExamPage() {
             <div className="grid gap-6 sm:grid-cols-2">
               {/* Paket */}
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-slate-700">
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Paket Ujian <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -139,12 +139,12 @@ export default function JoinExamPage() {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-slate-500">Pilih paket yang disediakan guru/penyelenggara.</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Pilih paket yang disediakan guru/penyelenggara.</p>
               </div>
 
               {/* Token */}
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-slate-700">
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Token Paket <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -155,23 +155,23 @@ export default function JoinExamPage() {
                   required
                   inputMode="text"
                 />
-                <p className="mt-1 text-xs text-slate-500">Minta token ke guru/panitia. Minimal 4 karakter.</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Minta token ke guru/panitia. Minimal 4 karakter.</p>
               </div>
             </div>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                <div className="w-full border-t border-slate-200" />
+                <div className="w-full border-t border-slate-200 dark:border-slate-800" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-white px-2 text-xs font-medium text-slate-500">Data Peserta</span>
+                <span className="bg-white dark:bg-slate-900 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">Data Peserta</span>
               </div>
             </div>
 
             {/* Data peserta */}
             <div className="grid gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Nama Lengkap <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -184,7 +184,7 @@ export default function JoinExamPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Email (opsional)</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Email (opsional)</label>
                 <input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -195,7 +195,7 @@ export default function JoinExamPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Kelas / NISN / No. HP (opsional)
                 </label>
                 <input
@@ -229,7 +229,7 @@ export default function JoinExamPage() {
               {loading ? 'Memproses…' : 'Mulai Ujian'}
             </button>
 
-            <p className="text-center text-xs text-slate-500">
+            <p className="text-center text-xs text-slate-500 dark:text-slate-400">
               Dengan menekan “Mulai Ujian”, Anda menyetujui tata tertib ujian.
             </p>
           </form>

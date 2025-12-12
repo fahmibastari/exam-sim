@@ -23,8 +23,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className="scroll-smooth">
-      <body className="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased selection:bg-indigo-100 selection:text-indigo-700">
+    <html lang="id" className="scroll-smooth" suppressHydrationWarning>
+      <body
+        className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 antialiased selection:bg-indigo-100 selection:text-indigo-700"
+        suppressHydrationWarning
+      >
         <Providers>
           <Header />
           <main className="flex-1 w-full">

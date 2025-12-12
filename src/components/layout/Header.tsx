@@ -1,34 +1,36 @@
 import Link from "next/link"
 import { Zap } from "lucide-react"
+import { ThemeToggle } from "@/components/ThemeToggle"
 
 export function Header() {
     return (
-        <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-white/80 backdrop-blur-md supports-[backdrop-filter]:bg-white/60">
+        <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 shadow-sm transition-colors">
             <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
                 <div className="flex items-center gap-2">
                     <Link href="/" className="flex items-center gap-2">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-600/20">
                             <Zap className="h-5 w-5" />
                         </div>
-                        <span className="text-lg font-bold tracking-tight text-slate-900">
+                        <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
                             ExamSim
                         </span>
                     </Link>
                 </div>
 
                 <nav className="hidden md:flex items-center gap-6">
-                    <Link href="/#features" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">
+                    <Link href="/#features" className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                         Fitur
                     </Link>
-                    <Link href="/#testimony" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">
+                    <Link href="/#testimony" className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                         Testimoni
                     </Link>
                 </nav>
 
                 <div className="flex items-center gap-4">
+                    <ThemeToggle />
                     <Link
                         href="/login"
-                        className="text-sm font-semibold text-slate-600 hover:text-slate-900"
+                        className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                     >
                         Admin Login
                     </Link>
