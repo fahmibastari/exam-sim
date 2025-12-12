@@ -1,8 +1,20 @@
 // src/app/exam/[attemptId]/AttemptClient.tsx
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import {
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  FileText,
+  Image as ImageIcon,
+  LayoutDashboard,
+  Save,
+  HelpCircle,
+  AlertTriangle
+} from 'lucide-react'
 
 type Option = { id: string; label: string; text: string }
 type Question = {
@@ -10,11 +22,11 @@ type Question = {
   order: number
   text: string
   imageUrl: string | null
-  type: 'SINGLE_CHOICE'|'MULTI_SELECT'|'TRUE_FALSE'|'SHORT_TEXT'|'ESSAY'|'NUMBER'|'RANGE'
+  type: 'SINGLE_CHOICE' | 'MULTI_SELECT' | 'TRUE_FALSE' | 'SHORT_TEXT' | 'ESSAY' | 'NUMBER' | 'RANGE'
   settings?: any
   options: Option[]
-  contextText?: string | null                      // ⬅️ baru
-  passage?: { id: string; title: string | null; content: string } | null // ⬅️ baru
+  contextText?: string | null
+  passage?: { id: string; title: string | null; content: string } | null
 }
 type AnswerShape = {
   selectedOptionIds?: string[]
@@ -48,6 +60,7 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
   const [remainingSec, setRemainingSec] = useState<number | null>(null)
   const [expired, setExpired] = useState(false)
   const autoSubmitRef = useRef(false)
+
   const saveTextDebounced = useRef(
     debounce((qid: string, valueText: string) => {
       save(qid, { valueText })
@@ -61,21 +74,21 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
     if (!attemptId) return
     setLoading(true); setError(null)
     const ac = new AbortController(); acRef.current = ac
-    ;(async () => {
-      try {
-        const r = await fetch(`/api/exams/${attemptId}/questions`, { signal: ac.signal })
-        if (!r.ok) throw new Error('Gagal memuat soal')
-        const json = (await r.json()) as Payload
-        setQs(json.questions)
-        setTimeLimitMin(json.timeLimitMin ?? null)
-        setEndsAt(json.endsAt ?? null)
-        setAnswers(json.answers ?? {})
-      } catch (e: any) {
-        if (e.name !== 'AbortError') setError(e.message || 'Gagal memuat')
-      } finally {
-        setLoading(false)
-      }
-    })()
+      ; (async () => {
+        try {
+          const r = await fetch(`/api/exams/${attemptId}/questions`, { signal: ac.signal })
+          if (!r.ok) throw new Error('Gagal memuat soal')
+          const json = (await r.json()) as Payload
+          setQs(json.questions)
+          setTimeLimitMin(json.timeLimitMin ?? null)
+          setEndsAt(json.endsAt ?? null)
+          setAnswers(json.answers ?? {})
+        } catch (e: any) {
+          if (e.name !== 'AbortError') setError(e.message || 'Gagal memuat')
+        } finally {
+          setLoading(false)
+        }
+      })()
     return () => ac.abort()
   }, [attemptId])
 
@@ -124,7 +137,7 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
 
   // helpers
   const timeBadge = typeof remainingSec === 'number'
-    ? `${String(Math.max(0, Math.floor(remainingSec / 60))).padStart(2,'0')}:${String(Math.max(0, remainingSec % 60)).padStart(2,'0')}`
+    ? `${String(Math.max(0, Math.floor(remainingSec / 60))).padStart(2, '0')}:${String(Math.max(0, remainingSec % 60)).padStart(2, '0')}`
     : null
   const critical = typeof remainingSec === 'number' && remainingSec <= 60 && remainingSec > 0
 
@@ -146,6 +159,8 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
   }
 
   async function submit() {
+    if (!confirm('Apakah Anda yakin ingin menyelesaikan ujian ini sekarang?')) return
+
     setLoading(true)
     try {
       const r = await fetch(`/api/exams/${attemptId}/submit`, { method: 'POST' })
@@ -165,26 +180,31 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
     (typeof a.valueNumber === 'number')
   ).length
   const total = qs.length
+  const progressPercent = total > 0 ? Math.round((answeredCount / total) * 100) : 0
 
-  if (!attemptId) return <div className="p-6">Attempt tidak valid.</div>
+  if (!attemptId) return <div className="p-10 text-center font-medium text-slate-500">URL Attempt tidak valid.</div>
 
   // loading skeleton
   if (loading) {
     return (
-      <main className="min-h-screen bg-neutral-50">
-        <section className="mx-auto max-w-5xl px-6 py-10">
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-            <div className="animate-pulse space-y-4">
-              <div className="h-6 w-1/3 rounded bg-gray-200" />
-              <div className="h-4 w-1/2 rounded bg-gray-200" />
-              <div className="grid gap-3">
-                <div className="h-20 rounded-xl bg-gray-100" />
-                <div className="h-20 rounded-xl bg-gray-100" />
-                <div className="h-20 rounded-xl bg-gray-100" />
+      <main className="min-h-screen bg-slate-50">
+        <header className="sticky top-0 z-20 border-b border-white/10 bg-white/80 backdrop-blur-md px-6 py-4">
+          <div className="mx-auto max-w-5xl flex items-center justify-between">
+            <div className="h-8 w-32 bg-slate-200 rounded animate-pulse" />
+            <div className="h-8 w-24 bg-slate-200 rounded animate-pulse" />
+          </div>
+        </header>
+        <div className="mx-auto max-w-4xl p-6 space-y-6">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
+              <div className="h-6 w-3/4 bg-slate-100 rounded mb-4 animate-pulse" />
+              <div className="space-y-3">
+                <div className="h-10 w-full bg-slate-50 rounded animate-pulse" />
+                <div className="h-10 w-full bg-slate-50 rounded animate-pulse" />
               </div>
             </div>
-          </div>
-        </section>
+          ))}
+        </div>
       </main>
     )
   }
@@ -192,254 +212,319 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
   // error state
   if (error) {
     return (
-      <main className="min-h-screen bg-neutral-50">
-        <section className="mx-auto max-w-lg px-6 py-10">
-          <div className="rounded-2xl border border-red-100 bg-white p-6 shadow-sm">
-            <h1 className="mb-2 text-2xl font-bold text-red-700">Terjadi Kesalahan</h1>
-            <p className="mb-4 text-sm text-red-700">{error}</p>
-            <button
-              onClick={() => location.reload()}
-              className="w-full rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-            >
-              Muat Ulang
-            </button>
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-8 text-center shadow-lg shadow-red-500/5">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-600 ring-4 ring-red-50/50">
+            <AlertTriangle className="h-7 w-7" />
           </div>
-        </section>
+          <h1 className="mb-2 text-xl font-bold text-slate-900">Terjadi Kesalahan</h1>
+          <p className="mb-6 text-sm text-slate-600">{error}</p>
+          <button
+            onClick={() => location.reload()}
+            className="w-full rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-200 transition hover:bg-red-700 hover:scale-[1.02] active:scale-[0.98]"
+          >
+            Muat Ulang Halaman
+          </button>
+        </div>
       </main>
     )
   }
 
-  const cardCls =
-    'rounded-2xl bg-white p-4 md:p-6 shadow-sm ring-1 ring-gray-200'
-  const selectCls =
-    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30'
-  const optWrap = (active: boolean) =>
-    `cursor-pointer rounded-xl border p-3 md:p-4 flex gap-3 items-start transition ${
-      active ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
-    }`
-
   return (
-    <main className="min-h-screen bg-neutral-50">
+    <main className="min-h-screen bg-slate-50">
       {/* Top Bar / Progress */}
-      <header className="sticky top-0 z-10 border-b bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="h-7 w-7 rounded-md bg-gradient-to-br from-blue-600 to-blue-400" />
-            <h1 className="text-base md:text-lg font-semibold text-gray-900">Mengerjakan Ujian</h1>
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <div className="relative mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+
+          {/* Left: Brand/Context */}
+          <div className="flex items-center gap-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-200">
+              <LayoutDashboard className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-slate-900">Ujian Berjalan</h1>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>{answeredCount} dari {total} terjawab</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Center: Timer (Desktop) */}
+          <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 transform md:block">
             {typeof timeLimitMin === 'number' && (
-              <span
-                className={`ml-2 inline-flex items-center rounded-full border px-3 py-1 text-xs ${
-                  expired
-                    ? 'border-red-200 bg-red-50 text-red-700'
-                    : critical
-                    ? 'border-amber-200 bg-amber-50 text-amber-700'
-                    : 'border-blue-200 bg-blue-50 text-blue-700'
-                }`}
-              >
-                {timeBadge ?? `${timeLimitMin} menit`}
-              </span>
+              <div className={`flex items-center gap-2 rounded-full border px-4 py-1.5 shadow-sm transition-all ${expired
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : critical
+                    ? 'border-amber-200 bg-amber-50 text-amber-700 animate-pulse'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}>
+                <Clock className="h-4 w-4" />
+                <span className="font-mono text-lg font-bold tracking-widest">{timeBadge}</span>
+              </div>
             )}
           </div>
-          <div className="text-sm text-gray-600">
-            Terjawab: <span className="font-semibold text-gray-800">{answeredCount}</span> / {total}
+
+          {/* Right: Timer (Mobile) + Actions */}
+          <div className="flex items-center gap-3">
+            {/* Timer Mobile */}
+            {typeof timeLimitMin === 'number' && (
+              <div className={`md:hidden flex items-center gap-1.5 rounded-lg border px-2 py-1 text-sm font-bold ${expired ? 'border-red-200 bg-red-50 text-red-700' : critical ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-700'
+                }`}>
+                <Clock className="h-3.5 w-3.5" />
+                <span className="font-mono">{timeBadge}</span>
+              </div>
+            )}
+
+            <button
+              onClick={submit}
+              className="hidden md:inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Selesai & Kumpul
+            </button>
+          </div>
+
+          {/* Progress Bar Bottom */}
+          <div className="absolute bottom-0 left-0 h-1 bg-slate-100 w-full">
+            <div
+              className="h-full bg-indigo-600 transition-all duration-500 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
           </div>
         </div>
       </header>
 
       {/* Body */}
-      <section className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
-        {(() => {
-          const renderedPassages = new Set<string>()
-          return qs.map((q) => (
+      <section className="mx-auto max-w-4xl p-6 pb-32 space-y-8">
+        {qs.map((q) => {
+          const isAnswered = !!answers[q.id]?.selectedOptionIds?.length || !!answers[q.id]?.valueText || (answers[q.id]?.valueNumber !== undefined && answers[q.id]?.valueNumber !== null);
+
+          return (
             <div key={q.id}>
-              {/* PASSAGE (sekali di atas grup terkait) */}
-              {q.passage && !renderedPassages.has(q.passage.id) && (
-                <>
-                  <div className={cardCls}>
-                    <div className="mb-2 text-sm font-semibold text-gray-900">
-                      {q.passage.title ?? 'Reading'}
-                    </div>
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
-                      {q.passage.content}
-                    </div>
+              {/* PASSAGE */}
+              {q.passage && (
+                <div className="mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm ring-1 ring-indigo-50">
+                  <div className="flex items-center gap-2 bg-indigo-50/80 px-4 py-3 border-b border-indigo-100">
+                    <FileText className="h-4 w-4 text-indigo-600" />
+                    <span className="text-xs font-bold text-indigo-700 uppercase tracking-wide">BACAAN: {q.passage.title || 'Untitled'}</span>
                   </div>
-                  {renderedPassages.add(q.passage.id) && null}
-                </>
+                  <div className="p-5 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap font-serif">
+                    {q.passage.content}
+                  </div>
+                </div>
               )}
 
-              {/* KARTU SOAL */}
-              <div className={cardCls}>
-                <div className="mb-3 flex items-start gap-3">
-                  <div className="shrink-0">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 font-bold text-white">
+              {/* SOAL CARD */}
+              <div id={`q-${q.id}`} className={`group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-300 ${isAnswered ? 'border-indigo-200 ring-1 ring-indigo-100' : 'border-slate-200 hover:border-indigo-300'}`}>
+                {/* Status Indicator */}
+                <div className={`absolute left-0 top-0 h-full w-1 ${isAnswered ? 'bg-indigo-500' : 'bg-transparent group-hover:bg-indigo-200'}`} />
+
+                <div className="p-6 md:p-8">
+                  {/* Question Header */}
+                  <div className="mb-6 flex gap-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 font-bold text-slate-600 shadow-sm ring-1 ring-slate-200">
                       {q.order}
-                    </span>
-                  </div>
-                  <div className="font-medium leading-relaxed text-gray-900">{q.text}</div>
-                </div>
+                    </div>
+                    <div className="flex-1 space-y-4">
+                      <div className="text-lg font-medium text-slate-900 leading-relaxed max-w-none prose prose-indigo">
+                        {q.text}
+                      </div>
 
-                {q.imageUrl && (
-                  <div className="mb-4">
-                    <img
-                      src={q.imageUrl}
-                      alt={`Gambar pendukung soal ${q.order}`}
-                      className="mx-auto max-h-64 rounded-xl border border-gray-200 object-contain"
-                    />
-                  </div>
-                )}
-
-                {/* CONTEXT TEXT (opsional) */}
-                {q.contextText && (
-                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                    {q.contextText}
-                  </div>
-                )}
-
-                {/* Render input sesuai tipe */}
-                {q.type === 'SINGLE_CHOICE' && (
-                  <fieldset className="grid gap-3 md:grid-cols-2">
-                    {q.options.map((o) => {
-                      const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
-                      return (
-                        <label key={o.id} className={optWrap(checked)}>
-                          <input
-                            type="radio"
-                            disabled={expired}
-                            name={q.id}
-                            value={o.id}
-                            checked={checked}
-                            onChange={() => chooseSingle(q.id, o.id)}
-                            className="mt-1"
+                      {q.imageUrl && (
+                        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                          <img
+                            src={q.imageUrl}
+                            alt={`Gambar soal ${q.order}`}
+                            className="w-full object-contain max-h-[400px]"
                           />
-                          <span className="text-gray-800">
-                            <span className="font-semibold">{o.label}.</span> {o.text}
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </fieldset>
-                )}
+                          <div className="absolute top-2 right-2 rounded-md bg-white/90 p-1.5 shadow-sm text-slate-500">
+                            <ImageIcon className="h-4 w-4" />
+                          </div>
+                        </div>
+                      )}
 
-                {q.type === 'MULTI_SELECT' && (
-                  <fieldset className="grid gap-3 md:grid-cols-2">
-                    {q.options.map((o) => {
-                      const selected = (answers[q.id]?.selectedOptionIds ?? []).includes(o.id)
-                      return (
-                        <label key={o.id} className={optWrap(selected)}>
-                          <input
-                            type="checkbox"
-                            disabled={expired}
-                            checked={selected}
-                            onChange={() => toggleMulti(q.id, o.id)}
-                            className="mt-1"
-                          />
-                          <span className="text-gray-800">
-                            <span className="font-semibold">{o.label}.</span> {o.text}
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </fieldset>
-                )}
-
-                {q.type === 'TRUE_FALSE' && (
-                  <fieldset className="grid gap-3 md:grid-cols-2">
-                    {q.options.map((o) => {
-                      const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
-                      return (
-                        <label key={o.id} className={optWrap(checked)}>
-                          <input
-                            type="radio"
-                            disabled={expired}
-                            name={q.id}
-                            value={o.id}
-                            checked={checked}
-                            onChange={() => chooseSingle(q.id, o.id)}
-                            className="mt-1"
-                          />
-                          <span className="text-gray-800">{o.text}</span>
-                        </label>
-                      )
-                    })}
-                  </fieldset>
-                )}
-
-                {(q.type === 'SHORT_TEXT' || q.type === 'ESSAY') && (
-                  <div>
-                    <textarea
-                      disabled={expired}
-                      value={answers[q.id]?.valueText || ''}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        setAnswers((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] ?? {}), valueText: v } }))
-                        if (!expiredRef.current) saveTextDebounced(q.id, v)
-                      }}
-                      className={selectCls}
-                    />
-                  </div>
-                )}
-
-                {q.type === 'NUMBER' && (
-                  <div className="max-w-sm">
-                    <input
-                      type="number"
-                      value={answers[q.id]?.valueNumber ?? ''}
-                      onChange={(e) => setNumber(q.id, e.target.value)}
-                      className={selectCls}
-                      placeholder="Masukkan angka"
-                      disabled={expired}
-                    />
-                  </div>
-                )}
-
-                {q.type === 'RANGE' && (
-                  <div className="grid max-w-sm gap-2">
-                    <input
-                      type="number"
-                      value={answers[q.id]?.valueNumber ?? ''}
-                      onChange={(e) => setNumber(q.id, e.target.value)}
-                      className={selectCls}
-                      placeholder={`Nilai antara ${q.settings?.min ?? 'min'} – ${q.settings?.max ?? 'max'}`}
-                      disabled={expired}
-                    />
-                    <div className="text-xs text-gray-600">
-                      Rentang: {q.settings?.min} – {q.settings?.max}{' '}
-                      {q.settings?.step ? `(step ${q.settings.step})` : ''}
+                      {q.contextText && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 flex gap-3 items-start">
+                          <AlertCircle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+                          <div>{q.contextText}</div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
-          ))
-        })()}
-        {/* Error inline */}
-        {error && (
-          <div
-            role="alert"
-            aria-live="polite"
-            className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-          >
-            {error}
-          </div>
-        )}
 
-        {/* Submit bar */}
-        <div className="sticky bottom-0 border-t bg-white/90 backdrop-blur">
-          <div className="mx-auto max-w-5xl p-4">
-            <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center">
-              <div className="flex-1 text-sm text-gray-600">
-                Periksa kembali jawaban sebelum mengirimkan.
+                  {/* ANSWER SECTION */}
+                  <div className="pl-0 md:pl-14">
+
+                    {/* SINGLE CHOICE */}
+                    {q.type === 'SINGLE_CHOICE' && (
+                      <div className="grid gap-3">
+                        {q.options.map((o) => {
+                          const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
+                          return (
+                            <label
+                              key={o.id}
+                              className={`
+                                relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all
+                                ${checked
+                                  ? 'border-indigo-500 bg-indigo-50/50 ring-1 ring-indigo-500 z-10'
+                                  : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'
+                                }
+                                ${expired ? 'cursor-not-allowed opacity-60' : ''}
+                              `}
+                            >
+                              <div className="flex h-6 w-6 shrink-0 items-center justify-center">
+                                <input
+                                  type="radio"
+                                  disabled={expired}
+                                  name={q.id}
+                                  value={o.id}
+                                  checked={checked}
+                                  onChange={() => chooseSingle(q.id, o.id)}
+                                  className="h-4 w-4 border-slate-300 text-indigo-600 focus:ring-indigo-600"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <span className={`inline-block font-bold mr-2 ${checked ? 'text-indigo-700' : 'text-slate-500'}`}>{o.label}.</span>
+                                <span className={`${checked ? 'text-slate-900 font-medium' : 'text-slate-700'}`}>{o.text}</span>
+                              </div>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* MULTI SELECT */}
+                    {q.type === 'MULTI_SELECT' && (
+                      <div className="grid gap-3">
+                        {q.options.map((o) => {
+                          const selected = (answers[q.id]?.selectedOptionIds ?? []).includes(o.id)
+                          return (
+                            <label
+                              key={o.id}
+                              className={`
+                                relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all
+                                ${selected
+                                  ? 'border-indigo-500 bg-indigo-50/50 ring-1 ring-indigo-500 z-10'
+                                  : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'
+                                }
+                                ${expired ? 'cursor-not-allowed opacity-60' : ''}
+                              `}
+                            >
+                              <div className="flex h-6 w-6 shrink-0 items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  disabled={expired}
+                                  checked={selected}
+                                  onChange={() => toggleMulti(q.id, o.id)}
+                                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <span className={`inline-block font-bold mr-2 ${selected ? 'text-indigo-700' : 'text-slate-500'}`}>{o.label}.</span>
+                                <span className={`${selected ? 'text-slate-900 font-medium' : 'text-slate-700'}`}>{o.text}</span>
+                              </div>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* TRUE/FALSE */}
+                    {q.type === 'TRUE_FALSE' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {q.options.map((o) => {
+                          const checked = (answers[q.id]?.selectedOptionIds ?? [])[0] === o.id
+                          return (
+                            <label
+                              key={o.id}
+                              className={`
+                                flex cursor-pointer flex-col items-center justify-center p-6 rounded-xl border-2 transition-all text-center gap-3
+                                ${checked
+                                  ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
+                                  : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50 text-slate-600'
+                                }
+                                ${expired ? 'cursor-not-allowed opacity-60' : ''}
+                              `}
+                            >
+                              <input
+                                type="radio"
+                                disabled={expired}
+                                name={q.id}
+                                value={o.id}
+                                checked={checked}
+                                onChange={() => chooseSingle(q.id, o.id)}
+                                className="sr-only"
+                              />
+                              <div className={`text-lg font-bold ${checked ? 'text-indigo-700' : 'text-slate-900'}`}>{o.text}</div>
+                              {checked && <CheckCircle2 className="h-6 w-6 text-indigo-600" />}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* TEXT INPUTS (SHORT & ESSAY) */}
+                    {(q.type === 'SHORT_TEXT' || q.type === 'ESSAY') && (
+                      <div className="relative">
+                        <textarea
+                          disabled={expired}
+                          value={answers[q.id]?.valueText || ''}
+                          rows={q.type === 'ESSAY' ? 5 : 2}
+                          placeholder={q.type === 'ESSAY' ? "Tulis jawaban uraian Anda di sini..." : "Tulis jawaban singkat..."}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setAnswers((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] ?? {}), valueText: v } }))
+                            if (!expiredRef.current) saveTextDebounced(q.id, v)
+                          }}
+                          className={`
+                            block w-full rounded-xl border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/30 transition-all
+                            ${expired ? 'cursor-not-allowed opacity-60' : ''}
+                          `}
+                        />
+                        <div className="absolute right-3 bottom-3">
+                          {answers[q.id]?.valueText && !expired && <Save className="h-4 w-4 text-emerald-500 animate-pulse" />}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* NUMBER & RANGE */}
+                    {(q.type === 'NUMBER' || q.type === 'RANGE') && (
+                      <div className="max-w-xs">
+                        <label className="text-xs font-semibold text-slate-500 mb-1.5 block">
+                          {q.type === 'RANGE' ? `Masukkan nilai antara ${q.settings?.min} - ${q.settings?.max}` : 'Masukkan angka'}
+                        </label>
+                        <input
+                          type="number"
+                          value={answers[q.id]?.valueNumber ?? ''}
+                          onChange={(e) => setNumber(q.id, e.target.value)}
+                          disabled={expired}
+                          placeholder="0"
+                          className="block w-full rounded-xl border-slate-200 bg-slate-50 px-4 py-3 text-lg font-mono text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/30 transition-all"
+                        />
+                        {q.type === 'RANGE' && q.settings?.step && (
+                          <div className="mt-1 text-xs text-slate-400">Step: {q.settings.step}</div>
+                        )}
+                      </div>
+                    )}
+
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={submit}
-                className="w-full rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:w-auto"
-              >
-                Kirim Jawaban
-              </button>
             </div>
-          </div>
-        </div>
+          )
+        })}
       </section>
+
+      {/* Floating Action Button (Mobile Only) */}
+      <div className="fixed bottom-6 right-6 md:hidden z-40">
+        <button
+          onClick={submit}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl shadow-slate-900/20 active:scale-90 transition-transform"
+        >
+          <CheckCircle2 className="h-6 w-6" />
+        </button>
+      </div>
+
     </main>
   )
 }
