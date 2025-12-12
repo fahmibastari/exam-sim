@@ -1,8 +1,12 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import Providers from './providers'
 import './globals.css'
+
+export const viewport: Viewport = {
+  themeColor: '#4f46e5',
+}
 
 export const metadata: Metadata = {
   title: {
@@ -11,7 +15,6 @@ export const metadata: Metadata = {
   },
   description: 'Simulasi ujian online yang modern & aman.',
   applicationName: 'ExamSim',
-  themeColor: '#4f46e5',
   icons: {
     icon: '/favicon.ico?v=2',
     apple: '/icons/apple-touch-icon.v2.png',
