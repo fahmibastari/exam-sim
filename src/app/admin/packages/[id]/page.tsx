@@ -111,9 +111,11 @@ type Tx =
 
 // ===== Page component =====
 export default async function EditPackagePage(
-  props: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }>, searchParams: Promise<{ q?: string }> }
 ) {
   const { id } = await props.params
+  const searchParams = await props.searchParams
+  const query = searchParams.q?.toLowerCase() || ''
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.role !== 'ADMIN') redirect('/login')
 
@@ -143,6 +145,31 @@ export default async function EditPackagePage(
     return pub.publicUrl
   }
 
+  async function uploadAudio(pkgId: string, file: File | null | undefined) {
+    'use server'
+    if (!file || (file as any).size === 0) return undefined
+
+    const maxBytes = 10 * 1024 * 1024 // 10MB
+    const okTypes = new Set(['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/aac'])
+    const mime = (file as any).type || ''
+
+    // Relaxed check: allow any audio/
+    if (!mime.startsWith('audio/')) throw new Error('File harus berupa audio')
+    if ((file as any).size > maxBytes) throw new Error('Ukuran audio maks 10MB')
+
+    const safeName = String((file as any).name || 'audio').replace(/[^\w.\-]+/g, '_')
+    const fileName = `${pkgId}/${Date.now()}_${safeName}`
+
+    // Use 'exam-audio' bucket
+    const { data, error } = await supabaseAdmin
+      .storage.from('exam-audio')
+      .upload(fileName, file as any, { upsert: false, contentType: mime })
+    if (error) throw new Error('Upload audio gagal: ' + error.message)
+
+    const { data: pub } = supabaseAdmin.storage.from('exam-audio').getPublicUrl(data.path)
+    return pub.publicUrl
+  }
+
   // ===== CREATE =====
   async function addQuestion(formData: FormData) {
     'use server'
@@ -157,6 +184,7 @@ export default async function EditPackagePage(
       required: formData.get('required'),
       contextText: formData.get('contextText'),
       passageId: formData.get('passageId'),
+      audio: formData.get('audio') as unknown as File | null,
 
       // opsi
       A: formData.get('A'),
@@ -190,6 +218,7 @@ export default async function EditPackagePage(
 
     const p = parsed.data
     const imageUrl = await uploadImage(id, parsed.data.image as File | null)
+    const audioUrl = await uploadAudio(id, raw.audio)
 
     const last = await prisma.question.findFirst({
       where: { examPackageId: id },
@@ -317,6 +346,8 @@ export default async function EditPackagePage(
         order: safeOrder,
         text: p.text,
         imageUrl,
+        // @ts-ignore
+        audioUrl,
         type,
         contextText: p.contextText ? String(p.contextText) : undefined,
         passageId: p.passageId ? String(p.passageId) : undefined,
@@ -347,6 +378,7 @@ export default async function EditPackagePage(
       required: formData.get('required'),
       contextText: formData.get('contextText'),
       passageId: formData.get('passageId'),
+      audio: formData.get('audio') as unknown as File | null,
 
 
       A: formData.get('A'),
@@ -406,6 +438,13 @@ export default async function EditPackagePage(
       imageUrl = await uploadImage(id, p.image as File)
     }
 
+    let audioUrl = q.audioUrl ?? undefined
+    // @ts-ignore
+    if (raw.audio && raw.audio.size > 0) {
+      // @ts-ignore
+      audioUrl = await uploadAudio(id, raw.audio)
+    }
+
     let optionsPayload: Array<{ id?: string; label: string; text: string; isCorrect?: boolean }> = []
     let settings: Record<string, any> | undefined = undefined
     const type = p.type
@@ -414,6 +453,8 @@ export default async function EditPackagePage(
       order: safeOrder,
       text: p.text,
       imageUrl,
+      // @ts-ignore
+      audioUrl,
       type,
       points: p.points ?? 1,
       required: p.required ?? false,
@@ -558,8 +599,17 @@ export default async function EditPackagePage(
     const title = String(formData.get('title') ?? '').trim() || null
     const content = String(formData.get('content') ?? '').trim()
     if (!content || content.length < 10) throw new Error('Isi passage minimal 10 karakter')
+
+    // @ts-ignore
+    const audioFile = formData.get('audio') as File | null
+    const audioUrl = await uploadAudio(id, audioFile)
+
+    const last = await prisma.passage.findFirst({ where: { examPackageId: id }, orderBy: { order: 'desc' }, select: { order: true } })
+    const newOrder = (last?.order ?? 0) + 1
+
     await prisma.passage.create({
-      data: { examPackageId: id, title, content },
+      // @ts-ignore
+      data: { examPackageId: id, title, content, audioUrl, order: newOrder },
     })
     revalidatePath(`/admin/packages/${id}`)
   }
@@ -571,10 +621,26 @@ export default async function EditPackagePage(
     if (!pid) throw new Error('ID passage kosong')
     const title = String(formData.get('title') ?? '').trim() || null
     const content = String(formData.get('content') ?? '').trim()
+    const order = Number(formData.get('order'))
     if (!content || content.length < 10) throw new Error('Isi passage minimal 10 karakter')
+
+    // @ts-ignore
+    const audioFile = formData.get('audio') as File | null
+    let audioUrlUpdate = undefined
+    if (audioFile && audioFile.size > 0) {
+      audioUrlUpdate = await uploadAudio(id, audioFile)
+    }
+
     await prisma.passage.update({
       where: { id: pid },
-      data: { title, content },
+      data: {
+        title,
+        content,
+        // @ts-ignore
+        ...(Number.isFinite(order) ? { order } : {}),
+        // @ts-ignore
+        ...(audioUrlUpdate ? { audioUrl: audioUrlUpdate } : {})
+      },
     })
     revalidatePath(`/admin/packages/${id}`)
   }
@@ -590,18 +656,20 @@ export default async function EditPackagePage(
   // ===== Fetch daftar soal =====
   const passages = await prisma.passage.findMany({
     where: { examPackageId: id },
-    orderBy: { createdAt: 'asc' },
+    // @ts-ignore
+    orderBy: { order: 'asc' },
   })
 
-  const questions = await prisma.question.findMany({
+  const questions = (await prisma.question.findMany({
     where: { examPackageId: id },
     include: { options: true, passage: { select: { id: true, title: true } } }, // NEW
     orderBy: { order: 'asc' }
-  }) as Array<{
+  })) as unknown as Array<{
     id: string
     order: number
     text: string
     imageUrl: string | null
+    audioUrl: string | null // NEW
     type: 'SINGLE_CHOICE' | 'MULTI_SELECT' | 'TRUE_FALSE' | 'SHORT_TEXT' | 'ESSAY' | 'NUMBER' | 'RANGE'
     points: number
     required: boolean
@@ -610,6 +678,15 @@ export default async function EditPackagePage(
     passage: { id: string; title: string | null } | null // NEW
     options: Array<{ id: string; label: string; text: string; isCorrect: boolean }>
   }>
+
+  // Filter questions if query exists
+  // We filter effectively here:
+  const filteredQuestions = query
+    ? questions.filter(q => q.text.toLowerCase().includes(query))
+    : questions
+
+  // Use filteredQuestions for the UI rendering to sections
+  const questionsToRender = filteredQuestions
 
 
 
@@ -698,6 +775,11 @@ export default async function EditPackagePage(
                   <p className="mt-1 text-xs text-slate-500">Markdown didukung. Minimal 10 karakter.</p>
                 </div>
                 <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">File Audio (Opsional)</label>
+                  <input type="file" name="audio" accept="audio/*" className={fileCls} />
+                  <p className="mt-1 text-xs text-slate-500">Format: MP3, WAV, M4A, AAC. Maks 10MB.</p>
+                </div>
+                <div>
                   <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm">
                     <Save className="h-4 w-4" />
                     Simpan Passage
@@ -724,6 +806,12 @@ export default async function EditPackagePage(
                       <span className="font-semibold text-slate-900">{p.title ?? '(Tanpa Judul)'}</span>
                     </div>
                     <div className="line-clamp-3 whitespace-pre-wrap text-sm text-slate-600 font-mono bg-white p-3 rounded border border-slate-200 text-xs">{(p as any).content}</div>
+                    {(p as any).audioUrl && (
+                      <div className="mt-2 flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                        <div className="font-semibold">Audio Tersedia</div>
+                        <audio controls src={(p as any).audioUrl} className="h-6 w-48" />
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2 self-start md:self-center">
@@ -744,6 +832,10 @@ export default async function EditPackagePage(
                           <div className="space-y-1">
                             <label className="text-xs font-medium text-slate-600">Konten</label>
                             <textarea name="content" defaultValue={(p as any).content ?? ''} rows={5} className={inputCls} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-600">Update Audio</label>
+                            <input type="file" name="audio" accept="audio/*" className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
                           </div>
                           <div className="flex justify-end pt-2">
                             <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700">Update</button>
@@ -824,8 +916,14 @@ export default async function EditPackagePage(
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Gambar (opsional)</label>
-                    <input name="image" type="file" accept="image/*" className={fileCls} />
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Gambar Soal (Opsional)</label>
+                    <input type="file" name="image" accept="image/*" className={fileCls} />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Audio Soal (Opsional)</label>
+                    <input type="file" name="audio" accept="audio/*" className={fileCls} />
+                    <p className="mt-1 text-xs text-slate-500">Listening Section. MP3/WAV/AAC/M4A. Max 10MB.</p>
                   </div>
 
                   <div className="sm:col-span-2">

@@ -22,11 +22,12 @@ type Question = {
   order: number
   text: string
   imageUrl: string | null
+  audioUrl: string | null // NEW
   type: 'SINGLE_CHOICE' | 'MULTI_SELECT' | 'TRUE_FALSE' | 'SHORT_TEXT' | 'ESSAY' | 'NUMBER' | 'RANGE'
   settings?: any
   options: Option[]
   contextText?: string | null
-  passage?: { id: string; title: string | null; content: string } | null
+  passage?: { id: string; title: string | null; content: string; audioUrl: string | null } | null
 }
 type AnswerShape = {
   selectedOptionIds?: string[]
@@ -253,10 +254,10 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
           <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 transform md:block">
             {typeof timeLimitMin === 'number' && (
               <div className={`flex items-center gap-2 rounded-full border px-4 py-1.5 shadow-sm transition-all ${expired
-                  ? 'border-red-200 bg-red-50 text-red-700'
-                  : critical
-                    ? 'border-amber-200 bg-amber-50 text-amber-700 animate-pulse'
-                    : 'border-slate-200 bg-white text-slate-700'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : critical
+                  ? 'border-amber-200 bg-amber-50 text-amber-700 animate-pulse'
+                  : 'border-slate-200 bg-white text-slate-700'
                 }`}>
                 <Clock className="h-4 w-4" />
                 <span className="font-mono text-lg font-bold tracking-widest">{timeBadge}</span>
@@ -310,6 +311,19 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
                   </div>
                   <div className="p-5 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap font-serif">
                     {q.passage.content}
+
+                    {/* Passage Audio */}
+                    {q.passage.audioUrl && (
+                      <div className="mt-4 rounded-xl bg-indigo-50 border border-indigo-100 p-3 flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white shrink-0">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-1">Passage Audio</div>
+                          <audio controls src={q.passage.audioUrl} className="w-full h-8" />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -339,6 +353,19 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
                           />
                           <div className="absolute top-2 right-2 rounded-md bg-white/90 p-1.5 shadow-sm text-slate-500">
                             <ImageIcon className="h-4 w-4" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Question Audio */}
+                      {q.audioUrl && (
+                        <div className="mt-2 mb-4 rounded-xl bg-slate-50 border border-slate-200 p-3 flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-white shrink-0">
+                            <span className="font-bold text-xs">MP3</span>
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Audio Soal</div>
+                            <audio controls src={q.audioUrl} className="w-full h-8" />
                           </div>
                         </div>
                       )}
@@ -525,6 +552,6 @@ export default function AttemptClient({ attemptId }: { attemptId: string }) {
         </button>
       </div>
 
-    </main>
+    </main >
   )
 }

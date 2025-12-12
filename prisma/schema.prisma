@@ -50,6 +50,8 @@ model Passage {
   examPackageId String
   title         String?
   content       String        // isi story panjang (markdown/plain text)
+  audioUrl      String?       // NEW: Audio support
+  order         Int           @default(0) // NEW: Section ordering
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -65,6 +67,7 @@ model Question {
   order         Int
   text          String
   imageUrl      String?
+  audioUrl      String?       // NEW: Audio support
   contextText   String?
 
   // BARU:
