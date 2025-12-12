@@ -24,7 +24,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     orderBy: { order: 'asc' },
     include: {
       options: { orderBy: { label: 'asc' } },
-      passage: { select: { id: true, title: true, content: true } }, // ⬅️ passage ikut
+      passage: { select: { id: true, title: true, content: true, audioUrl: true } }, // ⬅️ passage ikut
     },
   })
 
@@ -65,6 +65,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   const rnd = mulberry32(hashStr(attempt.id))
   const qShuffled = questions.map(q => ({
     ...q,
+    // @ts-ignore
     options: shuffle(q.options, rnd),
   }))
 
@@ -73,7 +74,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     where: { attemptId: attempt.id },
     select: { questionId: true, selectedOptionIds: true, valueText: true, valueNumber: true },
   })
-  const answers: Record<string, { selectedOptionIds?: string[]; valueText?: string; valueNumber?: number|null }> = {}
+  const answers: Record<string, { selectedOptionIds?: string[]; valueText?: string; valueNumber?: number | null }> = {}
   for (const a of existing) {
     answers[a.questionId] = {
       ...(answers[a.questionId] ?? {}),
@@ -89,12 +90,16 @@ export async function GET(_req: Request, ctx: Ctx) {
       order: q.order,
       text: q.text,
       imageUrl: q.imageUrl,
+      // @ts-ignore
+      audioUrl: q.audioUrl, // NEW
       type: q.type,
       points: q.points,
       required: q.required,
       settings: q.settings,
       contextText: q.contextText ?? null,
-      passage: q.passage ? { id: q.passage.id, title: q.passage.title, content: q.passage.content } : null,
+      // @ts-ignore
+      passage: q.passage ? { id: q.passage.id, title: q.passage.title, content: q.passage.content, audioUrl: q.passage.audioUrl } : null,
+      // @ts-ignore
       options: q.options.map((o: { id: string; label: string; text: string }) => ({
         id: o.id, label: o.label, text: o.text
       })),
